@@ -30,9 +30,9 @@ services:
         condition: service_healthy
     environment:
       MODEL_PROVIDER: ${MODEL_PROVIDER:-google}
-      LLM_MODEL: ${LLM_MODEL:-gemini-1.5-flash}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
       PROVIDER_FALLBACK_ORDER: ${PROVIDER_FALLBACK_ORDER:-google,anthropic,ollama}
-      GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-1.5-flash}
+      GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.5-flash}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-3-5-haiku-latest}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

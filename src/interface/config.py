@@ -17,9 +17,9 @@ class Settings(BaseSettings):
 
     # LLM (multi-proveedor)
     model_provider: str = "google"
-    llm_model: str = "gemini-1.5-flash"
+    llm_model: str = "gemini-2.5-flash"
     provider_fallback_order: str = "google,anthropic,ollama"
-    google_model: str = "gemini-1.5-flash"
+    google_model: str = "gemini-2.5-flash"
     anthropic_model: str = "claude-3-5-haiku-latest"
     ollama_model: str = "llama3.1:8b"
     anthropic_api_key: str = ""
