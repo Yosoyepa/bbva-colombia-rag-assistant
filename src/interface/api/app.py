@@ -6,6 +6,7 @@ HTTP ↔ casos de uso (DTO) y serializa. El Container se crea una vez (lifespan)
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 from uuid import UUID
 
 import structlog
@@ -27,6 +28,21 @@ class ChatResponse(BaseModel):
     session_id: UUID
     content: str
     sources: list[str]
+
+
+class SessionSummaryResponse(BaseModel):
+    session_id: UUID
+    created_at: datetime
+    updated_at: datetime | None
+    message_count: int
+    title: str
+
+
+class ChatMessageResponse(BaseModel):
+    role: str
+    content: str
+    sources: list[str]
+    created_at: datetime
 
 
 class HealthResponse(BaseModel):
@@ -91,6 +107,45 @@ def chat(req: ChatRequest) -> ChatResponse:
     return ChatResponse(
         session_id=answer.session_id, content=answer.content, sources=answer.sources
     )
+
+
+@app.get("/sessions", response_model=list[SessionSummaryResponse])
+def sessions(limit: int = 20) -> list[SessionSummaryResponse]:
+    c: Container = app.state.container
+    try:
+        rows = c.memory_repo.list_sessions(limit=max(1, min(limit, 100)))
+    except Exception as exc:  # noqa: BLE001
+        log.error("sessions_failed", error=str(exc))
+        raise HTTPException(status_code=503, detail="error leyendo las sesiones") from exc
+    return [
+        SessionSummaryResponse(
+            session_id=row.id,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            message_count=row.message_count,
+            title=row.title,
+        )
+        for row in rows
+    ]
+
+
+@app.get("/sessions/{session_id}/messages", response_model=list[ChatMessageResponse])
+def session_messages(session_id: UUID, limit: int = 100) -> list[ChatMessageResponse]:
+    c: Container = app.state.container
+    try:
+        rows = c.memory_repo.get_recent_messages(session_id, max(1, min(limit, 500)))
+    except Exception as exc:  # noqa: BLE001
+        log.error("session_messages_failed", session_id=str(session_id), error=str(exc))
+        raise HTTPException(status_code=503, detail="error leyendo los mensajes") from exc
+    return [
+        ChatMessageResponse(
+            role=row.role,
+            content=row.content,
+            sources=row.sources,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
 
 
 @app.get("/analytics", response_model=AnalyticsResponse)
