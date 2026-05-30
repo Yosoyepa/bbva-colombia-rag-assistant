@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import structlog
 
-from src.application.use_cases import AnswerQueryUseCase, IngestDataUseCase
+from src.application.use_cases import AnalyticsUseCase, AnswerQueryUseCase, IngestDataUseCase
 from src.interface.config import Settings, get_settings
 
 log = structlog.get_logger(__name__)
@@ -18,20 +18,46 @@ class Container:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
-        from src.infrastructure.embeddings import SentenceTransformerEmbedder
-        from src.infrastructure.persistence import (
-            PgChatMemoryRepository,
-            PgVectorKnowledgeRepository,
-            create_pool,
-        )
-        from src.infrastructure.retrieval import DenseRetrieval
+        from src.infrastructure.persistence import create_pool
 
         self.pool = create_pool(self.settings.pg_dsn)
-        self.embedder = SentenceTransformerEmbedder(self.settings.embedding_model)
-        self.knowledge_repo = PgVectorKnowledgeRepository(self.pool)
-        self.memory_repo = PgChatMemoryRepository(self.pool)
-        self.retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
+        self._embedder = None
+        self._knowledge_repo = None
+        self._memory_repo = None
+        self._retrieval = None
         self._llm = None
+
+    @property
+    def embedder(self):
+        if self._embedder is None:
+            from src.infrastructure.embeddings import SentenceTransformerEmbedder
+
+            self._embedder = SentenceTransformerEmbedder(self.settings.embedding_model)
+        return self._embedder
+
+    @property
+    def knowledge_repo(self):
+        if self._knowledge_repo is None:
+            from src.infrastructure.persistence import PgVectorKnowledgeRepository
+
+            self._knowledge_repo = PgVectorKnowledgeRepository(self.pool)
+        return self._knowledge_repo
+
+    @property
+    def memory_repo(self):
+        if self._memory_repo is None:
+            from src.infrastructure.persistence import PgChatMemoryRepository
+
+            self._memory_repo = PgChatMemoryRepository(self.pool)
+        return self._memory_repo
+
+    @property
+    def retrieval(self):
+        if self._retrieval is None:
+            from src.infrastructure.retrieval import DenseRetrieval
+
+            self._retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
+        return self._retrieval
 
     @property
     def llm(self):
@@ -45,6 +71,9 @@ class Container:
                 active_provider=s.model_provider,
                 fallback_order=s.fallback_order,
                 model=s.llm_model,
+                google_model=s.google_model,
+                anthropic_model=s.anthropic_model,
+                ollama_model=s.ollama_model,
                 google_api_key=s.google_api_key,
                 anthropic_api_key=s.anthropic_api_key,
                 aws_access_key_id=s.aws_access_key_id,
@@ -69,6 +98,9 @@ class Container:
             embedder=self.embedder,
             knowledge_repo=self.knowledge_repo,
         )
+
+    def analytics_use_case(self) -> AnalyticsUseCase:
+        return AnalyticsUseCase(memory=self.memory_repo)
 
     def db_healthy(self) -> bool:
         try:

@@ -40,17 +40,34 @@ class AnswerQueryUseCase:
         self._top_k = top_k
         self._n_history_messages = n_history_messages
 
-    def execute(self, session_id: UUID, query: str) -> Answer:
+    def execute(self, session_id: UUID | None, query: str) -> Answer:
         """Recuperar contexto + historial, construir prompt, generar respuesta anclada."""
         session = self._memory.get_or_create_session(session_id)
 
         # 1) Contexto relevante (Strategy: dense/rerank).
         context = self._retrieval.retrieve(query, self._top_k)
+        sources = PromptBuilder.sources_of(context)
 
         # 2) Ventana de N mensajes previos (CU-03) + la pregunta actual.
         history = self._memory.get_recent_messages(session.id, self._n_history_messages)
         user_msg = ChatMessage(session_id=session.id, role="user", content=query)
         messages = history + [user_msg]
+
+        if not context:
+            content = (
+                "No encontré información en el corpus indexado para responder esa pregunta "
+                "con fuentes confiables."
+            )
+            self._memory.add_message(user_msg)
+            self._memory.add_message(
+                ChatMessage(
+                    session_id=session.id,
+                    role="assistant",
+                    content=content,
+                    sources=[],
+                )
+            )
+            return Answer(session_id=session.id, content=content, sources=[], used_chunks=[])
 
         # 3) System prompt defensivo con el contexto embebido (Builder).
         system_prompt = PromptBuilder.build_system(context)
@@ -61,11 +78,16 @@ class AnswerQueryUseCase:
         # 5) Persistir el turno (memoria) y anclar fuentes.
         self._memory.add_message(user_msg)
         self._memory.add_message(
-            ChatMessage(session_id=session.id, role="assistant", content=content)
+            ChatMessage(
+                session_id=session.id,
+                role="assistant",
+                content=content,
+                sources=sources,
+            )
         )
         return Answer(
             session_id=session.id,
             content=content,
-            sources=PromptBuilder.sources_of(context),
+            sources=sources,
             used_chunks=context,
         )

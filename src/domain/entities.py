@@ -32,5 +32,6 @@ class ChatMessage:
     session_id: UUID
     role: str          # "user" | "assistant" | "system"
     content: str
+    sources: list[str] = field(default_factory=list)  # URLs citadas (respuestas) → CU-04
     created_at: datetime = field(default_factory=datetime.utcnow)
     id: UUID = field(default_factory=uuid4)

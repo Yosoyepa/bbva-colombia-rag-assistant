@@ -28,3 +28,19 @@ class ChatMemoryRepository(ABC):
         `limit` proviene de N_HISTORY_MESSAGES (config externalizada).
         """
         ...
+
+    # ── Agregaciones para analítica del histórico (CU-04) ──────────────────────
+    @abstractmethod
+    def count_sessions(self) -> int:
+        """Número total de sesiones registradas."""
+        ...
+
+    @abstractmethod
+    def count_messages(self) -> int:
+        """Número total de mensajes (todos los roles)."""
+        ...
+
+    @abstractmethod
+    def top_sources(self, limit: int = 10) -> list[tuple[str, int]]:
+        """Fuentes (source_url) más citadas en las respuestas: (url, nº de veces)."""
+        ...

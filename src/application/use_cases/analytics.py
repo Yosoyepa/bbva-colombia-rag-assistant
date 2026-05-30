@@ -22,5 +22,13 @@ class AnalyticsUseCase:
         self._memory = memory
 
     def execute(self) -> AnalyticsReport:
-        """Recorrer el histórico y agregar métricas. TODO(Fase 2)."""
-        raise NotImplementedError
+        """Recorrer el histórico real y agregar métricas de impacto."""
+        total_sessions = self._memory.count_sessions()
+        total_messages = self._memory.count_messages()
+        avg_messages = total_messages / total_sessions if total_sessions else 0.0
+        return AnalyticsReport(
+            total_sessions=total_sessions,
+            total_messages=total_messages,
+            top_sources=self._memory.top_sources(limit=10),
+            avg_messages_per_session=avg_messages,
+        )
