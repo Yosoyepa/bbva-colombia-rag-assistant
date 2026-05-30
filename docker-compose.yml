@@ -1,0 +1,26 @@
+# Stack del sistema RAG BBVA. En Fase 0 levanta pgvector con el esquema inicial;
+# el servicio `app` (FastAPI+Streamlit) se añade en Fase 4 para el "1 comando".
+#   docker compose up -d db   ->  base vectorial lista en localhost:5432
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: bbva_rag_db
+    environment:
+      POSTGRES_USER: ${PG_USER:-bbva}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-bbva}
+      POSTGRES_DB: ${PG_DATABASE:-bbva_rag}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Esquema idempotente: se ejecuta solo en la primera inicialización del volumen.
+      - ./src/infrastructure/persistence/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-bbva} -d ${PG_DATABASE:-bbva_rag}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
