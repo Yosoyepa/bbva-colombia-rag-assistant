@@ -7,6 +7,23 @@ and this project follows semantic versioning for delivery milestones.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-30
+
+### Added
+
+- Retrieval trace in `POST /chat` responses, including rank, source URL, pgvector distance,
+  similarity score, optional reranker score and content preview.
+- Streamlit retrieval trace expander per assistant response.
+- Recent conversations table in the Streamlit analytics tab.
+- README section documenting local embedding/reranker choices and observability scope.
+
+### Changed
+
+- Refactored Streamlit from a single `streamlit_app.py` file into a modular
+  `src/interface/streamlit_app/` package with API client, state and components.
+- FastAPI application metadata version updated to `1.2.0`.
+- Python package version updated to `1.2.0`.
+
 ## [1.1.0] - 2026-05-30
 
 ### Added
