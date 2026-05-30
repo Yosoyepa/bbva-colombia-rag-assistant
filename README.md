@@ -1,39 +1,73 @@
 # Sistema RAG BBVA Colombia
 
-Asistente conversacional sobre informacion publica de `bbva.com.co`. El sistema cubre el
-flujo pedido en la prueba tecnica: scraping, almacenamiento crudo y limpio, chunking,
-embeddings locales, indexacion en pgvector, chat con memoria por sesion, multi-proveedor
-LLM con fallback y analitica del historico.
+Asistente conversacional para consultar información pública de
+`https://www.bbva.com.co/` mediante RAG (Retrieval-Augmented Generation). El proyecto
+cubre el ciclo completo solicitado en la prueba técnica: scraping web, almacenamiento de
+datos crudos y limpios, vectorización, búsqueda semántica, respuesta con LLM, memoria por
+sesión y analítica del histórico.
 
-La prioridad de diseno fue entregar un sistema demostrable con Docker en poco tiempo, sin
-perder separacion de responsabilidades. Por eso se eligio un monolito modular con Clean
-Architecture/Hexagonal: suficiente para mantener proveedores intercambiables y tests
-claros, pero sin el costo operativo de microservicios para una prueba de 2-3 dias.
+La solución prioriza tres atributos de calidad propios del contexto de entrega:
+demostrabilidad, mantenibilidad y tiempo de implementación. Por eso se implementa como un
+monolito modular con arquitectura hexagonal, levantable con Docker en un solo comando, y
+con adaptadores intercambiables para proveedores LLM, retrieval y persistencia.
 
-## Requisitos Previos
+## Tabla de contenido
+
+- [Alcance funcional](#alcance-funcional)
+- [Inicio Rápido](#inicio-rápido)
+- [Uso del sistema](#uso-del-sistema)
+- [Arquitectura](#arquitectura)
+- [Casos de Uso y Flujos](#casos-de-uso-y-flujos)
+- [Decisiones Técnicas](#decisiones-técnicas)
+- [Patrones aplicados](#patrones-aplicados)
+- [Alternativas evaluadas](#alternativas-evaluadas)
+- [Configuración](#configuración)
+- [API y CLI](#api-y-cli)
+- [Pruebas y Validación](#pruebas-y-validación)
+- [Limitaciones y Evolución](#limitaciones-y-evolución)
+- [Versionado](#versionado)
+
+## Alcance funcional
+
+| Requisito | Implementación |
+|---|---|
+| Scraping del sitio BBVA Colombia | `SeleniumBase` en modo UC sobre páginas públicas de `bbva.com.co`. |
+| Datos crudos y limpios | Store-and-Forward en `data/raw` y `data/clean`. |
+| Vectorización e índice | Embeddings locales CPU con `sentence-transformers` y búsqueda en PostgreSQL + pgvector. |
+| Interfaz conversacional | Streamlit como UI, consumiendo FastAPI por HTTP. |
+| Memoria por ID | Sesiones UUID persistidas en PostgreSQL y ventana configurable `N_HISTORY_MESSAGES`. |
+| Dockerización | `docker compose up --build` levanta PostgreSQL/pgvector, FastAPI y Streamlit. |
+| Patrones de diseño | Factory, Strategy, Adapter, Repository, Builder, Decorator y Chain of Responsibility. |
+| Analítica histórica | Pestaña visual en Streamlit, endpoint `GET /analytics` y CLI `bbva-analytics`. |
+| Reranker bonus | `RerankRetrieval` con Cross-Encoder, activable por `RERANK_ENABLED`. |
+| Manejo de errores bonus | Fallback multi-proveedor, Circuit Breaker y handlers globales HTTP. |
+| Configuración externa bonus | `.env` para proveedores, modelos, chunking, memoria, DB y retrieval. |
+
+## Inicio Rápido
+
+### Requisitos previos
 
 - Docker y Docker Compose.
-- Una clave de LLM para respuestas reales. Camino recomendado: `GOOGLE_API_KEY` con
-  `MODEL_PROVIDER=google`.
-- Opcional: Ollama local si se quiere `MODEL_PROVIDER=ollama`. En Docker usar
-  `OLLAMA_HOST=http://host.docker.internal:11434`.
+- Una credencial de LLM para respuestas reales. Camino recomendado:
+  `MODEL_PROVIDER=google` con `GOOGLE_API_KEY`.
+- Opcional: servidor Ollama local si se quiere usar `MODEL_PROVIDER=ollama`.
 
-## Arranque Desde Cero
+### Ejecución desde cero
 
-1. Clonar el repositorio y entrar al proyecto:
+1. Clonar el repositorio:
 
 ```bash
 git clone <URL_DEL_REPOSITORIO>
 cd PruebaTecnica
 ```
 
-2. Crear `.env` desde el ejemplo y configurar al menos un proveedor LLM:
+2. Crear archivo de entorno:
 
 ```bash
 cp .env.example .env
 ```
 
-Para el camino recomendado:
+3. Configurar al menos un proveedor LLM. Ejemplo recomendado:
 
 ```env
 MODEL_PROVIDER=google
@@ -42,255 +76,368 @@ GOOGLE_MODEL=gemini-2.5-flash
 PROVIDER_FALLBACK_ORDER=google,anthropic,ollama
 ```
 
-3. Levantar base de datos, API y UI con un comando:
+4. Levantar todo con Docker:
 
 ```bash
 docker compose up --build
 ```
 
-4. Abrir las interfaces:
+5. Abrir las interfaces:
 
 - Streamlit: http://localhost:8501
-- API FastAPI: http://localhost:8000/docs
+- Swagger/OpenAPI: http://localhost:8000/docs
 - Healthcheck: http://localhost:8000/health
 
-5. Ingestar contenido de BBVA:
+6. Ingestar contenido del sitio:
 
 ```bash
 docker compose exec app bbva-ingest --max-pages 25
 ```
 
-Para una validacion rapida se puede usar `--max-pages 3`.
-
-6. Consultar metricas del historico:
+Para una validación rápida:
 
 ```bash
-docker compose exec app bbva-analytics
+docker compose exec app bbva-ingest --max-pages 3
 ```
 
-## Uso
+## Uso del sistema
 
-La forma principal de uso es Streamlit en http://localhost:8501. La UI consume la API
-FastAPI; no llama directamente al motor RAG. Esto deja un contrato REST verificable y
-permite probar el nucleo sin depender de la interfaz visual.
+### Chat
 
-Ejemplo REST:
+La pestaña **Chat** permite hacer preguntas sobre la información indexada de BBVA
+Colombia. Cada respuesta incluye fuentes cuando el contexto recuperado las soporta.
 
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Que informacion general aparece sobre BBVA Colombia para empresas?"}'
-```
+El sistema crea una sesión UUID en la primera pregunta. En preguntas posteriores,
+Streamlit reutiliza ese `session_id`; el backend recupera los últimos
+`N_HISTORY_MESSAGES` mensajes de la misma sesión y los envía al LLM junto con el contexto
+RAG.
 
-La respuesta incluye:
+### Conversaciones
 
-- `session_id`: identificador de conversacion.
-- `content`: respuesta generada.
-- `sources`: URLs usadas como contexto.
-
-Reusar el `session_id` mantiene memoria conversacional con los ultimos
-`N_HISTORY_MESSAGES`.
-
-## Que Se Implemento
-
-| Requisito de la prueba | Estado | Implementacion |
-|---|---:|---|
-| Scraping de `bbva.com.co` | Incluido | `SeleniumBase` en modo UC y almacenamiento en `data/raw`. |
-| Datos crudos y limpios | Incluido | Store-and-Forward en disco: raw HTML + texto limpio. |
-| Vectorizacion e indice | Incluido | `sentence-transformers` CPU + PostgreSQL `pgvector` con HNSW. |
-| Interfaz conversacional | Incluido | Streamlit consumiendo FastAPI. |
-| Historial por ID y ventana N | Incluido | Persistencia en PostgreSQL y `N_HISTORY_MESSAGES` por env. |
-| Docker con un comando | Incluido | `docker compose up --build` levanta DB + app. |
-| >=3 patrones de diseno | Incluido | Factory, Strategy, Adapter, Repository, Builder, Decorator, CoR. |
-| Analitica historica | Incluido | CLI `bbva-analytics` y `GET /analytics`. |
-| Bonus reranker | Incluido | `RerankRetrieval` con Cross-Encoder, activable por env. |
-| Bonus manejo de errores | Incluido | HTTP errors claros, fallback y circuit breaker. |
-| Bonus config externa | Incluido | `.env` con proveedores, modelos, chunking, memoria y DB. |
-
-## Enfoque Arquitectonico
-
-El enfoque final sigue `PLAN_REAL.md`:
-
-- **Monolito modular:** maximiza demostrabilidad y reduce friccion de despliegue.
-- **Clean Architecture / Hexagonal:** `domain`, `application`, `infrastructure` e
-  `interface` separan reglas de negocio de frameworks y SDKs.
-- **Microkernel/plugin como lente:** LLMs, retrieval y scraping se seleccionan por
-  configuracion y adaptadores, no por cambios al core.
-- **REST:** FastAPI expone el motor RAG; Streamlit queda como cliente.
-- **EDA-lite in-process:** la ingesta es un pipeline por etapas
-  `scrape -> clean -> chunk -> embed -> index`, sin broker externo.
-- **Cliente-servidor:** navegador/Streamlit/API/PostgreSQL, suficiente para el alcance.
-
-Se descartaron microservicios y SOA para esta entrega porque anaden despliegue,
-descubrimiento, balanceo, observabilidad distribuida y fallos de red que no mejoran la
-evaluacion principal del RAG. La arquitectura deja puertos claros para evolucionar hacia
-servicios separados si el volumen o el equipo lo justifican.
-
-## Estructura
+El panel lateral muestra conversaciones persistidas. Cada entrada incluye un título
+derivado de la primera pregunta y el número de mensajes registrados. Al seleccionar una
+conversación, Streamlit carga sus mensajes desde:
 
 ```text
-src/
-  domain/            # entidades puras: Document, Chunk, ChatSession, ChatMessage
-  application/
-    ports/           # contratos del nucleo
-    use_cases/       # IngestDataUseCase, AnswerQueryUseCase, AnalyticsUseCase
-    prompt_builder.py
-  infrastructure/
-    scraping/        # SeleniumBase + limpieza + chunking
-    embeddings/      # sentence-transformers CPU
-    persistence/     # PostgreSQL + pgvector + memoria
-    retrieval/       # DenseRetrieval / RerankRetrieval
-    llm/             # Google, Anthropic, Bedrock, Ollama, fallback, circuit breaker
-  interface/
-    api/             # FastAPI
-    streamlit_app.py # UI
-    cli.py           # bbva-ingest
-    analytics.py     # bbva-analytics
-specs/               # CU-01 a CU-04 con criterios de aceptacion
-tests/l1             # tests unitarios
-tests/l2             # Ragas ligero opt-in
+GET /sessions/{session_id}/messages
 ```
 
-## Decisiones Tecnicas Y Viabilidad
+### Analítica
 
-| Decision | Por que se eligio |
-|---|---|
-| PostgreSQL + pgvector | Unifica vectores, memoria conversacional y analitica en una sola DB self-hosted. Cumple Docker 1 comando y evita depender de un SaaS vectorial. |
-| Embeddings locales CPU | Reducen costo y dependencia externa. El modelo multilingual MiniLM usa 384 dimensiones, suficiente para el corpus publico de la prueba. |
-| Gemini como proveedor recomendado | Permite respuestas reales sin GPU local. Ollama queda soportado, pero no es el camino por defecto porque el entorno sin GPU puede ser lento. |
-| Multi-proveedor real | El core no queda atado a un SDK. Se puede cambiar entre Google, Anthropic, Bedrock y Ollama por `.env`. |
-| Fallback + Circuit Breaker | Si un proveedor falla o no tiene credenciales, el sistema intenta el siguiente y evita insistir sobre proveedores rotos. |
-| Reranker opt-in | Mejora relevancia, pero consume CPU. Por eso `RERANK_ENABLED=false` por defecto y se activa cuando se quiera priorizar calidad sobre latencia. |
-| FastAPI + Streamlit | Streamlit da UI rapida; FastAPI deja contrato REST validable y separa interfaz de motor. |
-| Tests L1 + L2 ligero | Proporcional al tiempo. L1 cubre logica determinista; L2 con Ragas queda opt-in por costo/credenciales. |
-
-## Patrones
-
-### Patrones de diseno implementados
-
-- **Factory Method:** `LLMFactory` crea `GeminiClient`, `AnthropicClient`,
-  `BedrockClient` u `OllamaClient` segun `.env`.
-- **Strategy:** `DenseRetrieval` y `RerankRetrieval` implementan la misma estrategia de
-  recuperacion para el caso de uso de respuesta.
-- **Adapter:** los SDKs externos, SeleniumBase, psycopg y pgvector viven en
-  `infrastructure` y se adaptan a ports del nucleo.
-- **Repository:** `PgVectorKnowledgeRepository` y `PgChatMemoryRepository` implementan
-  persistencia sin filtrar SQL al caso de uso.
-- **Builder:** `PromptBuilder` ensambla prompt defensivo, contexto, fuentes y ventana de
-  memoria.
-- **Decorator:** `CircuitBreakerLLM` envuelve proveedores LLM sin modificar clientes.
-- **Chain of Responsibility:** `FallbackChainLLM` prueba proveedores en orden hasta
-  obtener respuesta.
-
-### Patrones arquitectonicos aplicados
-
-- **DTO:** modelos Pydantic en la frontera REST.
-- **Store-and-Forward:** raw + clean en disco antes de indexar.
-- **Circuit Breaker:** resiliencia ante proveedores externos.
-- **Log Aggregation:** logging estructurado y persistencia de fuentes para CU-04.
-
-### Patrones evaluados y no incluidos
-
-No se incluyeron API Gateway, Service Registry/Discovery, Load Balancer, SSO, Webhooks ni
-microservicios porque no aportan al alcance evaluado y aumentan la complejidad operativa.
-Prototype, Flyweight, Bridge, Composite, Interpreter, Visitor, Memento, Mediator, State,
-Command, Template, Proxy, Iterator y Object Pool se descartaron por no resolver un
-problema real del sistema en esta escala.
-
-## Configuracion
-
-Variables principales:
-
-- `MODEL_PROVIDER`: `google`, `anthropic`, `bedrock` u `ollama`.
-- `PROVIDER_FALLBACK_ORDER`: orden de fallback, por ejemplo `google,anthropic,ollama`.
-- `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_*`, `OLLAMA_HOST`: credenciales/conexion.
-- `GOOGLE_MODEL`, `ANTHROPIC_MODEL`, `BEDROCK_MODEL_ID`, `OLLAMA_MODEL`: modelo por
-  proveedor.
-- `EMBEDDING_MODEL` y `EMBEDDING_DIM`: por defecto MiniLM multilingual de 384 dimensiones.
-- `TOP_K`, `RERANK_ENABLED`, `RERANK_MODEL`: recuperacion y reranking.
-- `N_HISTORY_MESSAGES`: ventana de memoria por sesion.
-- `CHUNK_SIZE`, `CHUNK_OVERLAP`, `SCRAPE_BASE_URL`: ingesta.
-- `PG_*`: conexion PostgreSQL.
-
-## API
-
-- `GET /health`: estado de API, DB y proveedor configurado.
-- `POST /chat`: pregunta/respuesta con memoria opcional por `session_id`.
-- `GET /analytics`: metricas del historico.
-
-Ejemplo con memoria:
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "UUID_EXISTENTE", "message": "Y que mas dice sobre eso?"}'
-```
-
-## Analitica
-
-`bbva-analytics` recorre el historico persistido y reporta:
+La pestaña **Analítica** muestra observabilidad del MVP:
 
 - total de sesiones,
 - total de mensajes,
-- promedio de mensajes por sesion,
-- fuentes mas citadas.
+- promedio de mensajes por sesión,
+- fuentes más citadas,
+- gráfico de citas por fuente.
 
-La misma informacion esta disponible en `GET /analytics`. El objetivo es demostrar el
-requisito CU-04 sin introducir una plataforma externa de observabilidad.
+Estas métricas se calculan desde el histórico persistido; no son contadores en memoria.
+También están disponibles por CLI y API.
 
-## Pruebas Y Validacion
+## Arquitectura
 
-Tests unitarios:
+El proyecto usa un monolito modular con Clean Architecture / Hexagonal:
 
-```bash
-docker compose exec app pytest tests/l1
+```text
+            interface ─┐
+                       ├─► application ─► domain
+        infrastructure ┘
 ```
 
-Suite completa local:
+### Capas
+
+- `domain`: entidades puras (`Document`, `Chunk`, `ChatSession`, `ChatMessage`).
+- `application`: casos de uso, ports y `PromptBuilder`.
+- `infrastructure`: adaptadores para scraping, embeddings, pgvector, retrieval y LLMs.
+- `interface`: FastAPI, Streamlit, CLI, analítica y composition root.
+
+### Estructura principal
+
+```text
+src/
+  domain/
+  application/
+    ports/
+    use_cases/
+    prompt_builder.py
+  infrastructure/
+    scraping/
+    embeddings/
+    persistence/
+    retrieval/
+    llm/
+  interface/
+    api/
+      routers/
+      schemas.py
+      errors.py
+      dependencies.py
+      app.py
+    streamlit_app.py
+    cli.py
+    analytics.py
+specs/
+tests/l1
+tests/l2
+docker-compose.yml
+Dockerfile
+CHANGELOG.md
+```
+
+### Estilos arquitectónicos elegidos
+
+- **Monolito modular:** reduce fricción operativa y permite entregar un MVP demostrable.
+- **Arquitectura en capas / hexagonal:** protege el núcleo de frameworks y SDKs externos.
+- **Microkernel/plugin como criterio de extensibilidad:** proveedores LLM y estrategias de
+  retrieval son intercambiables por configuración.
+- **REST:** FastAPI expone el motor y Streamlit actúa como cliente.
+- **EDA-lite in-process:** la ingesta es un pipeline secuencial dentro del proceso:
+  `scrape -> clean -> chunk -> embed -> index`.
+
+## Casos de Uso y Flujos
+
+### CU-01: Ingesta de Conocimiento
+
+```text
+bbva-ingest
+  -> SeleniumBaseScraper
+  -> TrafilaturaCleaner
+  -> TextChunker
+  -> SentenceTransformerEmbedder
+  -> PgVectorKnowledgeRepository
+```
+
+Resultado:
+
+- HTML crudo en `data/raw`.
+- Texto limpio en `data/clean`.
+- Chunks indexados en `document_chunks`.
+- Índice HNSW sobre `VECTOR(384)`.
+
+### CU-02: Consulta RAG
+
+```text
+pregunta
+  -> embedding de la query
+  -> retrieval top-K en pgvector
+  -> rerank opcional
+  -> PromptBuilder
+  -> LLM multi-proveedor
+  -> respuesta con fuentes
+```
+
+Si no se recupera contexto suficiente, el caso de uso responde que no encontró
+información confiable en el corpus, evitando inventar.
+
+### CU-03: Memoria Conversacional
+
+```text
+session_id
+  -> chat_sessions
+  -> chat_messages
+  -> últimos N mensajes
+  -> prompt del LLM
+```
+
+La relación es lineal: una sesión contiene muchos mensajes. No se implementa árbol de
+ramas conversacionales porque el requerimiento pide memoria por ID y ventana N, no
+bifurcación de hilos.
+
+### CU-04: Analítica Histórica
+
+```text
+chat_sessions + chat_messages.sources
+  -> AnalyticsUseCase
+  -> GET /analytics
+  -> Streamlit Analítica / bbva-analytics
+```
+
+Las fuentes citadas por respuestas del asistente se persisten para alimentar métricas de
+impacto y trazabilidad.
+
+## Decisiones Técnicas
+
+| Decisión | Razón |
+|---|---|
+| PostgreSQL + pgvector | Unifica vectores, memoria conversacional y analítica en una sola base self-hosted. Evita depender de un SaaS vectorial y simplifica Docker. |
+| HNSW + similitud coseno | Buena relación entre velocidad y calidad para búsqueda semántica aproximada. |
+| `sentence-transformers` local CPU | Reduce costo y dependencia externa para embeddings. El modelo multilingual MiniLM de 384 dimensiones es suficiente para el corpus de la prueba. |
+| Gemini como proveedor recomendado | Permite inferencia real sin GPU local. Ollama queda soportado para ejecución local, pero no es el camino por defecto en CPU. |
+| Multi-proveedor LLM | El core no queda atado a un SDK. Google, Anthropic, Bedrock y Ollama implementan el mismo port. |
+| Fallback + Circuit Breaker | Aumenta resiliencia ante credenciales faltantes, timeouts o caídas de proveedor. |
+| FastAPI + Streamlit | FastAPI deja contrato REST verificable; Streamlit ofrece UI funcional y rápida para la prueba. |
+| Reranker opt-in | Mejora relevancia, pero consume CPU; por eso se activa con `RERANK_ENABLED=true`. |
+| Tests L1 + L2 ligero | Cobertura proporcional: unitarios deterministas y evaluación RAG opt-in sin hacer pesado el flujo base. |
+
+## Patrones aplicados
+
+### Patrones de Diseño
+
+| Patrón | Dónde | Propósito |
+|---|---|---|
+| Factory Method | `infrastructure/llm/factory.py` | Crear proveedor LLM según `MODEL_PROVIDER`. |
+| Strategy | `infrastructure/retrieval/` | Intercambiar `DenseRetrieval` y `RerankRetrieval`. |
+| Adapter | `infrastructure/` | Adaptar SeleniumBase, SDKs LLM, psycopg y pgvector a ports del núcleo. |
+| Repository | `application/ports` + `infrastructure/persistence` | Ocultar SQL y exponer persistencia como colecciones de dominio. |
+| Builder | `application/prompt_builder.py` | Construir system prompt con contexto, fuentes y reglas anti-alucinación. |
+| Decorator | `infrastructure/llm/circuit_breaker.py` | Envolver proveedores LLM con Circuit Breaker. |
+| Chain of Responsibility | `infrastructure/llm/fallback_chain.py` | Intentar proveedores en orden hasta obtener respuesta. |
+
+### Patrones arquitectónicos
+
+- **DTO:** modelos Pydantic en `src/interface/api/schemas.py`.
+- **Store-and-Forward:** datos crudos y limpios antes de indexar.
+- **Circuit Breaker:** aislamiento de fallos en proveedores externos.
+- **Log Aggregation:** persistencia de fuentes citadas para analítica.
+- **Composition Root:** `src/interface/container.py` ensambla dependencias.
+
+### Patrones evaluados y no incluidos
+
+No se implementaron API Gateway, Service Registry, Service Discovery, Load Balancer,
+Webhooks, SSO ni microservicios porque pertenecen a escenarios de distribución y escala
+que no aportan al MVP solicitado. También se descartaron Prototype, Flyweight, Bridge,
+Composite, Interpreter, Visitor, Memento, Mediator, State, Command, Template Method,
+Proxy, Iterator y Object Pool porque no resolvían un problema concreto del alcance actual.
+
+## Alternativas evaluadas
+
+| Alternativa | Decisión |
+|---|---|
+| Microservicios / SOA | Descartado para el MVP. Aumenta complejidad de despliegue, red, observabilidad distribuida y manejo de fallos. |
+| LangChain / LangGraph como orquestador | No se usó como core para mantener visibles los patrones requeridos y conservar Clean Architecture. |
+| `langchain-text-splitters` | Usado solo para chunking, una utilidad acotada que no captura la arquitectura. |
+| LlamaIndex / Haystack | Descartados por la misma razón que LangChain como orquestador: acoplarían el núcleo al framework. |
+| LiteLLM | Descartado porque el Factory + fallback propio son parte del entregable técnico y dan control fino del Circuit Breaker. |
+| Pinecone / Qdrant / Weaviate / Chroma | Descartados para esta entrega porque pgvector cubre vectores, memoria y analítica con menos infraestructura. |
+| requests + BeautifulSoup / Scrapy | Descartados por menor resiliencia frente al WAF de un sitio bancario moderno. |
+| Embeddings por API | Descartados para la ruta base por costo y dependencia externa; embeddings locales cumplen el requerimiento. |
+
+## Configuración
+
+Variables principales en `.env`:
+
+| Variable | Uso |
+|---|---|
+| `MODEL_PROVIDER` | Proveedor activo: `google`, `anthropic`, `bedrock`, `ollama`. |
+| `PROVIDER_FALLBACK_ORDER` | Orden de fallback entre proveedores. |
+| `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_*`, `OLLAMA_HOST` | Credenciales/conexión por proveedor. |
+| `GOOGLE_MODEL`, `ANTHROPIC_MODEL`, `BEDROCK_MODEL_ID`, `OLLAMA_MODEL` | Modelo específico por proveedor. |
+| `EMBEDDING_MODEL`, `EMBEDDING_DIM` | Modelo y dimensión de embeddings. |
+| `TOP_K` | Número de chunks recuperados. |
+| `RERANK_ENABLED`, `RERANK_MODEL` | Activación y modelo de reranking. |
+| `N_HISTORY_MESSAGES` | Ventana de memoria conversacional. |
+| `CHUNK_SIZE`, `CHUNK_OVERLAP` | Parámetros de chunking. |
+| `SCRAPE_BASE_URL` | URL base de scraping. |
+| `PG_*` | Conexión PostgreSQL. |
+
+## API y CLI
+
+### API
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/health` | Estado de API, DB y proveedor configurado. |
+| `POST` | `/chat` | Pregunta/respuesta RAG con `session_id` opcional. |
+| `GET` | `/sessions` | Lista conversaciones persistidas. |
+| `GET` | `/sessions/{session_id}/messages` | Carga mensajes de una conversación. |
+| `GET` | `/analytics` | Métricas históricas del chat. |
+
+Ejemplo:
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "¿Qué información general aparece sobre BBVA Colombia para empresas?"}'
+```
+
+Para continuar una conversación:
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "UUID_EXISTENTE", "message": "¿Y qué más dice sobre eso?"}'
+```
+
+### CLI
+
+```bash
+docker compose exec app bbva-ingest --max-pages 25
+docker compose exec app bbva-analytics
+```
+
+## Pruebas y Validación
+
+Suite completa:
 
 ```bash
 docker compose exec app pytest tests
 ```
 
-Evaluacion L2 ligera con Ragas:
+Solo L1:
+
+```bash
+docker compose exec app pytest tests/l1
+```
+
+Evaluación L2 opt-in con Ragas:
 
 ```bash
 docker compose exec -e RUN_RAGAS_L2=1 app pytest tests/l2
 ```
 
-Durante el desarrollo se valido el flujo end-to-end con Docker:
+Validaciones realizadas durante el desarrollo:
 
-- pgvector activo con extension, tabla `document_chunks`, HNSW y `VECTOR(384)`.
-- ingesta real de paginas de BBVA con archivos crudos/limpios y chunks indexados.
-- `/chat` respondiendo con Gemini y fuentes.
-- `/analytics` reportando sesiones, mensajes y fuentes citadas.
+- PostgreSQL + pgvector con extensión `vector`, tabla `document_chunks`, HNSW y
+  `VECTOR(384)`.
+- Ingesta real de páginas de BBVA con persistencia cruda/limpia y chunks indexados.
+- Contrato REST validado con FastAPI/TestClient.
+- Chat real con Gemini y fuentes.
+- Memoria por `session_id` persistida y visible en Streamlit.
+- Analítica visible por Streamlit, API y CLI.
+- Docker Compose levantando app + DB en un comando.
 
-## Limitaciones Y Supuestos
+## Limitaciones y Evolución
 
-- El scraping de sitios bancarios puede ser bloqueado por WAF/Cloudflare. Se usa
-  SeleniumBase UC, pero el bloqueo operativo sigue siendo un riesgo externo.
-- Sin una clave valida de LLM, `/health` puede estar OK y `/chat` fallara con error claro
-  de proveedor no disponible.
-- `VECTOR(384)` esta acoplado al modelo de embeddings por defecto; cambiar dimensiones
-  exige reindexar.
-- El reranker esta incluido pero apagado por defecto para no penalizar latencia en CPU.
-- No se implemento autenticacion de usuarios, SSO ni autorizacion por roles; quedan fuera
-  del alcance de la prueba.
-- La evaluacion L2 es opt-in para no exigir credenciales ni costo en cada ejecucion.
-- No hay scheduler de re-scraping; la ingesta se ejecuta manualmente con `bbva-ingest`.
+### Limitaciones actuales
 
-## Futuras Mejoras
+- El scraping de sitios bancarios puede verse afectado por WAF o cambios de estructura del
+  sitio. SeleniumBase UC reduce el riesgo, pero no elimina la dependencia externa.
+- La dimensión `VECTOR(384)` está ligada al modelo de embeddings configurado por defecto;
+  cambiar de modelo requiere reindexar.
+- Ollama está soportado, pero en entornos sin GPU puede tener latencia alta.
+- El reranker está apagado por defecto para mantener buena latencia en CPU.
+- No se implementan autenticación, autorización ni SSO; son extensiones naturales para un
+  entorno corporativo real.
+- La evaluación L2 es opt-in para no exigir credenciales ni costo en cada ejecución.
+- La ingesta se ejecuta manualmente; no hay scheduler de refresco de contenido.
 
-- Re-scraping programado con frescura de documentos y deteccion de cambios.
-- Autenticacion, autorizacion y separacion de sesiones por usuario real.
-- Observabilidad centralizada con latencia por etapa, proveedor y query.
-- Dataset de evaluacion mas grande con umbrales Ragas en CI.
-- Retrieval hibrido BM25 + denso.
-- Cache de respuestas y embeddings para reducir costo y latencia.
-- API Gateway y despliegue por servicios solo si el volumen operacional lo justifica.
+### Futuras mejoras
 
-## Historial De Trabajo
+- Re-scraping programado con detección de cambios y políticas de frescura.
+- Autenticación y autorización por usuario interno.
+- Observabilidad con latencias por etapa, proveedor y consulta.
+- Dataset de evaluación más amplio con umbrales Ragas en CI.
+- Retrieval híbrido BM25 + denso.
+- Cache de embeddings y respuestas.
+- Despliegue distribuido solo si el volumen operativo lo justifica.
 
-El repositorio usa GitFlow: `develop` como rama de integracion, `feature/*` para cambios
-importantes, merges `--no-ff` y release final en `main` con tag `v1.0.0`. Esto responde al
-requisito de historial visible y progresion logica, no un unico commit final.
+## Versionado
+
+El proyecto usa versionado semántico para los hitos de entrega:
+
+- `v1.0.0`: MVP RAG completo.
+- `v1.1.0`: mejora menor con dashboard visual de analítica.
+
+Los cambios relevantes se documentan en [CHANGELOG.md](CHANGELOG.md).
+
+## Historial de trabajo
+
+El repositorio sigue GitFlow:
+
+- `main`: rama estable de releases.
+- `develop`: integración.
+- `feature/*`: desarrollo incremental.
+
+Los merges se hacen con `--no-ff` y commits semánticos para que el historial muestre una
+progresión técnica revisable, alineada con el criterio de evaluación de la prueba.
