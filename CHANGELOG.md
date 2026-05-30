@@ -7,6 +7,28 @@ and this project follows semantic versioning for delivery milestones.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-30
+
+### Added
+
+- Verification/validation test taxonomy under `tests/verification` and `tests/validation`.
+- Architecture, performance, resilience, persistence and system validation tests.
+- Ragas ground-truth dataset with always-on structure validation and opt-in real Ragas run.
+- Chat observability metrics in `POST /chat`: stage latencies, provider and cache hit state.
+- Streamlit observability expander per assistant response.
+- Persistent embedding cache and opt-in answer cache with TTL.
+- Hybrid retrieval strategy combining pgvector dense search and PostgreSQL full-text search.
+- Freshness/change detection table for scraping runs and `bbva-ingest` flags:
+  `--freshness-hours` and `--force-refresh`.
+- GitHub Actions quality workflow for verification, light validation and opt-in RAG quality.
+
+### Changed
+
+- FastAPI application metadata version updated to `1.3.0`.
+- Python package version updated to `1.3.0`.
+- README updated to describe software quality scope, V&V commands, retrieval/cache/freshness
+  decisions and observability contract.
+
 ## [1.2.0] - 2026-05-30
 
 ### Added

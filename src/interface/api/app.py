@@ -35,7 +35,7 @@ def create_app(container_factory: Callable[[], Container] = Container) -> FastAP
         finally:
             app.state.container.close()
 
-    app = FastAPI(title="BBVA RAG API", version="1.2.0", lifespan=lifespan)
+    app = FastAPI(title="BBVA RAG API", version="1.3.0", lifespan=lifespan)
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(chat_router)

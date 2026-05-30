@@ -41,9 +41,14 @@ con adaptadores intercambiables para proveedores LLM, retrieval y persistencia.
 | Patrones de diseño | Factory, Strategy, Adapter, Repository, Builder, Decorator y Chain of Responsibility. |
 | Analítica histórica | Pestaña visual en Streamlit, endpoint `GET /analytics` y CLI `bbva-analytics`. |
 | Trazabilidad RAG | `/chat` expone ranking, distancia, similitud y preview de chunks recuperados. |
+| Observabilidad de chat | `/chat` expone latencias por etapa, proveedor y estado de cache; Streamlit las muestra por respuesta. |
+| Retrieval híbrido | Estrategia `dense` por defecto y `hybrid` opcional con BM25 PostgreSQL + pgvector. |
+| Cache controlada | Cache persistente de embeddings y cache opt-in de respuestas con TTL. |
+| Frescura de ingesta | Registro de páginas scrapeadas para saltar reindexado fresco/sin cambios. |
 | Reranker bonus | `RerankRetrieval` con Cross-Encoder, activable por `RERANK_ENABLED`. |
 | Manejo de errores bonus | Fallback multi-proveedor, Circuit Breaker y handlers globales HTTP. |
 | Configuración externa bonus | `.env` para proveedores, modelos, chunking, memoria, DB y retrieval. |
+| Calidad V&V | Pruebas separadas en verificación y validación: unit, integration, architecture, system, performance, resilience, persistence y RAG quality. |
 
 ## Inicio Rápido
 
@@ -111,6 +116,10 @@ Colombia. Cada respuesta incluye fuentes cuando el contexto recuperado las sopor
 Además, cada respuesta nueva puede desplegar una traza de retrieval con ranking, URL,
 distancia pgvector, similitud aproximada, score de reranker cuando aplica y preview del
 chunk usado.
+
+Cada respuesta también incluye un panel de observabilidad con latencia total, retrieval,
+LLM, persistencia, proveedor usado y estado de cache. Estas métricas son locales al
+request; no requieren Prometheus ni un servicio externo para ser útiles durante la prueba.
 
 El sistema crea una sesión UUID en la primera pregunta. En preguntas posteriores,
 Streamlit reutiliza ese `session_id`; el backend recupera los últimos
@@ -188,8 +197,17 @@ src/
     cli.py
     analytics.py
 specs/
-tests/l1
-tests/l2
+tests/
+  verification/
+    unit/
+    integration/
+    architecture/
+  validation/
+    system/
+    rag_quality/
+    performance/
+    resilience/
+    persistence/
 docker-compose.yml
 Dockerfile
 CHANGELOG.md
@@ -224,13 +242,14 @@ Resultado:
 - Texto limpio en `data/clean`.
 - Chunks indexados en `document_chunks`.
 - Índice HNSW sobre `VECTOR(384)`.
+- Registro de frescura en `scraped_pages` para saltar páginas recientes sin cambios.
 
 ### CU-02: Consulta RAG
 
 ```text
 pregunta
   -> embedding de la query
-  -> retrieval top-K en pgvector
+  -> retrieval top-K en pgvector (dense o hybrid)
   -> rerank opcional
   -> PromptBuilder
   -> LLM multi-proveedor
@@ -239,6 +258,10 @@ pregunta
 
 Si no se recupera contexto suficiente, el caso de uso responde que no encontró
 información confiable en el corpus, evitando inventar.
+
+La cache de embeddings está activa por defecto para no recalcular vectores repetidos. La
+cache de respuestas queda apagada por defecto porque durante evaluación conviene observar
+cambios de corpus y de configuración; puede activarse con TTL cuando se prioriza latencia.
 
 ### CU-03: Memoria Conversacional
 
@@ -273,13 +296,17 @@ impacto y trazabilidad.
 | PostgreSQL + pgvector | Unifica vectores, memoria conversacional y analítica en una sola base self-hosted. Evita depender de un SaaS vectorial y simplifica Docker. |
 | HNSW + similitud coseno | Buena relación entre velocidad y calidad para búsqueda semántica aproximada. |
 | `sentence-transformers` local CPU | Reduce costo y dependencia externa para embeddings. El modelo multilingual MiniLM de 384 dimensiones es suficiente para el corpus de la prueba. |
+| Retrieval híbrido opt-in | BM25 rescata coincidencias lexicales importantes y pgvector aporta similitud semántica; se activa con `RETRIEVAL_MODE=hybrid` para comparar sin romper el default. |
 | Gemini como proveedor recomendado | Permite inferencia real sin GPU local. Ollama queda soportado para ejecución local, pero no es el camino por defecto en CPU. |
 | Modelos locales para embedding y reranking | Se ejecutan en CPU para reducir costo y dependencia externa en recuperación. La generación queda en proveedores LLM configurables porque exige mayor calidad conversacional. |
 | Multi-proveedor LLM | El core no queda atado a un SDK. Google, Anthropic, Bedrock y Ollama implementan el mismo port. |
 | Fallback + Circuit Breaker | Aumenta resiliencia ante credenciales faltantes, timeouts o caídas de proveedor. |
+| Cache de embeddings activa | Reduce trabajo repetido en CPU y mantiene los resultados persistidos por modelo/texto. |
+| Cache de respuestas opt-in | Mejora latencia cuando el corpus está estable, pero se desactiva por defecto para no ocultar cambios durante evaluación. |
+| Frescura de scraping | Evita reindexar páginas frescas e idénticas; conserva un CLI manual y deja scheduler externo como decisión operacional. |
 | FastAPI + Streamlit | FastAPI deja contrato REST verificable; Streamlit ofrece UI funcional y rápida para la prueba. |
 | Reranker opt-in | Mejora relevancia, pero consume CPU; por eso se activa con `RERANK_ENABLED=true`. |
-| Tests L1 + L2 ligero | Cobertura proporcional: unitarios deterministas y evaluación RAG opt-in sin hacer pesado el flujo base. |
+| Pruebas V&V | Verificación para construcción correcta y validación para atributos de ejecución: sistema, performance, resiliencia, persistencia y calidad RAG. |
 
 ## Modelos locales y observabilidad
 
@@ -307,10 +334,28 @@ Además de logs estructurados con `structlog`, el contrato `POST /chat` devuelve
 - `distance`: distancia coseno reportada por pgvector.
 - `similarity_score`: aproximación `1 - distance` para lectura humana.
 - `rerank_score`: score del Cross-Encoder cuando el reranker está activo.
+- `dense_score`, `bm25_score`, `hybrid_score`: scores opcionales cuando se usa
+  `RETRIEVAL_MODE=hybrid`.
 - `content_preview`: fragmento breve para auditoría visual.
 
 Streamlit muestra esta traza en un panel desplegable por respuesta. Esto permite revisar
 si el sistema respondió con evidencia real del índice y no solo con texto generado.
+
+### Observabilidad de latencias
+
+`POST /chat` agrega el objeto opcional `observability` sin romper el contrato previo:
+
+- `total_latency_ms`: duración total del request de chat.
+- `retrieval_latency_ms`: tiempo de búsqueda de contexto.
+- `prompt_latency_ms`: tiempo de armado del prompt.
+- `llm_latency_ms`: tiempo de generación.
+- `persistence_latency_ms`: tiempo de escritura de memoria/fuentes.
+- `provider`: proveedor LLM efectivo o `answer_cache`.
+- `cache_hit`: indica si la respuesta vino de cache.
+
+Streamlit muestra estos datos en un expander por respuesta. Para esta versión se eligió
+observabilidad embebida y logs estructurados porque es suficiente para demostrar el MVP
+sin introducir Prometheus, OpenTelemetry o infraestructura adicional.
 
 ## Patrones aplicados
 
@@ -319,7 +364,7 @@ si el sistema respondió con evidencia real del índice y no solo con texto gene
 | Patrón | Dónde | Propósito |
 |---|---|---|
 | Factory Method | `infrastructure/llm/factory.py` | Crear proveedor LLM según `MODEL_PROVIDER`. |
-| Strategy | `infrastructure/retrieval/` | Intercambiar `DenseRetrieval` y `RerankRetrieval`. |
+| Strategy | `infrastructure/retrieval/` | Intercambiar `DenseRetrieval`, `HybridRetrieval` y `RerankRetrieval`. |
 | Adapter | `infrastructure/` | Adaptar SeleniumBase, SDKs LLM, psycopg y pgvector a ports del núcleo. |
 | Repository | `application/ports` + `infrastructure/persistence` | Ocultar SQL y exponer persistencia como colecciones de dominio. |
 | Builder | `application/prompt_builder.py` | Construir system prompt con contexto, fuentes y reglas anti-alucinación. |
@@ -332,6 +377,7 @@ si el sistema respondió con evidencia real del índice y no solo con texto gene
 - **Store-and-Forward:** datos crudos y limpios antes de indexar.
 - **Circuit Breaker:** aislamiento de fallos en proveedores externos.
 - **Log Aggregation:** persistencia de fuentes citadas para analítica.
+- **Cache-aside:** cache persistente de embeddings y respuestas sin mezclarla con el caso de uso.
 - **Composition Root:** `src/interface/container.py` ensambla dependencias.
 
 ### Patrones evaluados y no incluidos
@@ -367,10 +413,15 @@ Variables principales en `.env`:
 | `GOOGLE_MODEL`, `ANTHROPIC_MODEL`, `BEDROCK_MODEL_ID`, `OLLAMA_MODEL` | Modelo específico por proveedor. |
 | `EMBEDDING_MODEL`, `EMBEDDING_DIM` | Modelo y dimensión de embeddings. |
 | `TOP_K` | Número de chunks recuperados. |
+| `RETRIEVAL_MODE` | Estrategia principal: `dense` o `hybrid`. |
+| `HYBRID_BM25_WEIGHT`, `HYBRID_DENSE_WEIGHT` | Pesos para fusionar score lexical y semántico. |
 | `RERANK_ENABLED`, `RERANK_MODEL` | Activación y modelo de reranking. |
+| `EMBEDDING_CACHE_ENABLED` | Activa cache persistente de embeddings. |
+| `ANSWER_CACHE_ENABLED`, `ANSWER_CACHE_TTL_SECONDS` | Cache opt-in de respuestas y TTL. |
 | `N_HISTORY_MESSAGES` | Ventana de memoria conversacional. |
 | `CHUNK_SIZE`, `CHUNK_OVERLAP` | Parámetros de chunking. |
 | `SCRAPE_BASE_URL` | URL base de scraping. |
+| `SCRAPE_FRESHNESS_HOURS`, `RESCRAPE_CHANGED_ONLY` | Política de frescura y detección de cambios. |
 | `PG_*` | Conexión PostgreSQL. |
 
 ## API y CLI
@@ -380,7 +431,7 @@ Variables principales en `.env`:
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/health` | Estado de API, DB y proveedor configurado. |
-| `POST` | `/chat` | Pregunta/respuesta RAG con `session_id` opcional, fuentes y `retrieval_trace`. |
+| `POST` | `/chat` | Pregunta/respuesta RAG con `session_id` opcional, fuentes, `retrieval_trace` y `observability`. |
 | `GET` | `/sessions` | Lista conversaciones persistidas. |
 | `GET` | `/sessions/{session_id}/messages` | Carga mensajes de una conversación. |
 | `GET` | `/analytics` | Métricas históricas del chat. |
@@ -405,6 +456,8 @@ curl -X POST http://localhost:8000/chat \
 
 ```bash
 docker compose exec app bbva-ingest --max-pages 25
+docker compose exec app bbva-ingest --max-pages 3 --freshness-hours 24
+docker compose exec app bbva-ingest --max-pages 3 --force-refresh
 docker compose exec app bbva-analytics
 ```
 
@@ -416,16 +469,23 @@ Suite completa:
 docker compose exec app pytest tests
 ```
 
-Solo L1:
+Verificación: unitarios, integración y arquitectura.
 
 ```bash
-docker compose exec app pytest tests/l1
+docker compose exec app pytest tests/verification
 ```
 
-Evaluación L2 opt-in con Ragas:
+Validación ligera: sistema, performance, resiliencia, persistencia y estructura del dataset
+RAG.
 
 ```bash
-docker compose exec -e RUN_RAGAS_L2=1 app pytest tests/l2
+docker compose exec app pytest tests/validation
+```
+
+Evaluación RAG con Ragas real, opt-in por credenciales:
+
+```bash
+docker compose exec -e RUN_RAGAS_L2=1 app pytest tests/validation/rag_quality
 ```
 
 Validaciones realizadas durante el desarrollo:
@@ -438,6 +498,9 @@ Validaciones realizadas durante el desarrollo:
 - Memoria por `session_id` persistida y visible en Streamlit.
 - Analítica visible por Streamlit, API y CLI.
 - Trazabilidad de retrieval visible por respuesta en Streamlit.
+- Observabilidad de latencias visible por respuesta en Streamlit y en el contrato REST.
+- Cache de embeddings, cache opt-in de respuestas y freshness de ingesta cubiertos por tests.
+- Retrieval híbrido BM25 + denso cubierto por strategy/unit y contrato extendido.
 - Docker Compose levantando app + DB en un comando.
 
 ## Limitaciones y Evolución
@@ -453,16 +516,17 @@ Validaciones realizadas durante el desarrollo:
 - No se implementan autenticación, autorización ni SSO; son extensiones naturales para un
   entorno corporativo real.
 - La evaluación L2 es opt-in para no exigir credenciales ni costo en cada ejecución.
-- La ingesta se ejecuta manualmente; no hay scheduler de refresco de contenido.
+- La ingesta aplica frescura y detección de cambios, pero se ejecuta manualmente; no hay
+  scheduler externo incluido.
+- La cache de respuestas está apagada por defecto para evitar esconder cambios del corpus
+  durante revisión técnica.
 
 ### Futuras mejoras
 
-- Re-scraping programado con detección de cambios y políticas de frescura.
 - Autenticación y autorización por usuario interno.
-- Observabilidad con latencias por etapa, proveedor y consulta.
-- Dataset de evaluación más amplio con umbrales Ragas en CI.
-- Retrieval híbrido BM25 + denso.
-- Cache de embeddings y respuestas.
+- Scheduler externo para invocar `bbva-ingest` por cron, GitHub Actions o un orquestador.
+- Métricas productivas con Prometheus/OpenTelemetry si el sistema pasa a operación continua.
+- Umbrales Ragas más estrictos en CI cuando existan credenciales y dataset curado por negocio.
 - Despliegue distribuido solo si el volumen operativo lo justifica.
 
 ## Versionado
@@ -472,6 +536,7 @@ El proyecto usa versionado semántico para los hitos de entrega:
 - `v1.0.0`: MVP RAG completo.
 - `v1.1.0`: mejora menor con dashboard visual de analítica.
 - `v1.2.0`: trazabilidad de retrieval y refactor modular de Streamlit.
+- `v1.3.0`: calidad de software con V&V, observabilidad, cache, retrieval híbrido y frescura de ingesta.
 
 Los cambios relevantes se documentan en [CHANGELOG.md](CHANGELOG.md).
 
