@@ -54,9 +54,16 @@ class Container:
     @property
     def retrieval(self):
         if self._retrieval is None:
-            from src.infrastructure.retrieval import DenseRetrieval
+            from src.infrastructure.retrieval import DenseRetrieval, RerankRetrieval
 
-            self._retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
+            if self.settings.rerank_enabled:
+                self._retrieval = RerankRetrieval(
+                    self.embedder,
+                    self.knowledge_repo,
+                    model_name=self.settings.rerank_model,
+                )
+            else:
+                self._retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
         return self._retrieval
 
     @property
