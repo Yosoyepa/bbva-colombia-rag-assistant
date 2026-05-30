@@ -20,6 +20,12 @@ data/clean/
 
 # Planeación interna (artefacto de trabajo; la gobernanza viva está en AGENTS.md/CLAUDE.md)
 PLAN_REAL.md
+plan_de_implementacion.md
+
+# Artefactos locales de agentes/herramientas
+.agents/
+.claude/skills/
+skills-lock.json
 
 # Tests / coverage
 .pytest_cache/
