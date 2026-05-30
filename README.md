@@ -19,6 +19,7 @@ con adaptadores intercambiables para proveedores LLM, retrieval y persistencia.
 - [Arquitectura](#arquitectura)
 - [Casos de Uso y Flujos](#casos-de-uso-y-flujos)
 - [Decisiones Técnicas](#decisiones-técnicas)
+- [Modelos locales y observabilidad](#modelos-locales-y-observabilidad)
 - [Patrones aplicados](#patrones-aplicados)
 - [Alternativas evaluadas](#alternativas-evaluadas)
 - [Configuración](#configuración)
@@ -39,6 +40,7 @@ con adaptadores intercambiables para proveedores LLM, retrieval y persistencia.
 | Dockerización | `docker compose up --build` levanta PostgreSQL/pgvector, FastAPI y Streamlit. |
 | Patrones de diseño | Factory, Strategy, Adapter, Repository, Builder, Decorator y Chain of Responsibility. |
 | Analítica histórica | Pestaña visual en Streamlit, endpoint `GET /analytics` y CLI `bbva-analytics`. |
+| Trazabilidad RAG | `/chat` expone ranking, distancia, similitud y preview de chunks recuperados. |
 | Reranker bonus | `RerankRetrieval` con Cross-Encoder, activable por `RERANK_ENABLED`. |
 | Manejo de errores bonus | Fallback multi-proveedor, Circuit Breaker y handlers globales HTTP. |
 | Configuración externa bonus | `.env` para proveedores, modelos, chunking, memoria, DB y retrieval. |
@@ -106,6 +108,9 @@ docker compose exec app bbva-ingest --max-pages 3
 
 La pestaña **Chat** permite hacer preguntas sobre la información indexada de BBVA
 Colombia. Cada respuesta incluye fuentes cuando el contexto recuperado las soporta.
+Además, cada respuesta nueva puede desplegar una traza de retrieval con ranking, URL,
+distancia pgvector, similitud aproximada, score de reranker cuando aplica y preview del
+chunk usado.
 
 El sistema crea una sesión UUID en la primera pregunta. En preguntas posteriores,
 Streamlit reutiliza ese `session_id`; el backend recupera los últimos
@@ -131,6 +136,7 @@ La pestaña **Analítica** muestra observabilidad del MVP:
 - promedio de mensajes por sesión,
 - fuentes más citadas,
 - gráfico de citas por fuente.
+- conversaciones recientes.
 
 Estas métricas se calculan desde el histórico persistido; no son contadores en memoria.
 También están disponibles por CLI y API.
@@ -174,7 +180,11 @@ src/
       errors.py
       dependencies.py
       app.py
-    streamlit_app.py
+    streamlit_app/
+      app.py
+      api_client.py
+      components.py
+      state.py
     cli.py
     analytics.py
 specs/
@@ -264,11 +274,43 @@ impacto y trazabilidad.
 | HNSW + similitud coseno | Buena relación entre velocidad y calidad para búsqueda semántica aproximada. |
 | `sentence-transformers` local CPU | Reduce costo y dependencia externa para embeddings. El modelo multilingual MiniLM de 384 dimensiones es suficiente para el corpus de la prueba. |
 | Gemini como proveedor recomendado | Permite inferencia real sin GPU local. Ollama queda soportado para ejecución local, pero no es el camino por defecto en CPU. |
+| Modelos locales para embedding y reranking | Se ejecutan en CPU para reducir costo y dependencia externa en recuperación. La generación queda en proveedores LLM configurables porque exige mayor calidad conversacional. |
 | Multi-proveedor LLM | El core no queda atado a un SDK. Google, Anthropic, Bedrock y Ollama implementan el mismo port. |
 | Fallback + Circuit Breaker | Aumenta resiliencia ante credenciales faltantes, timeouts o caídas de proveedor. |
 | FastAPI + Streamlit | FastAPI deja contrato REST verificable; Streamlit ofrece UI funcional y rápida para la prueba. |
 | Reranker opt-in | Mejora relevancia, pero consume CPU; por eso se activa con `RERANK_ENABLED=true`. |
 | Tests L1 + L2 ligero | Cobertura proporcional: unitarios deterministas y evaluación RAG opt-in sin hacer pesado el flujo base. |
+
+## Modelos locales y observabilidad
+
+### Modelos locales
+
+La recuperación semántica se apoya en modelos locales ejecutados en CPU:
+
+- `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` para embeddings locales CPU.
+- Dimensión `384`, alineada con `VECTOR(384)` en pgvector.
+- Embeddings normalizados para búsqueda por distancia coseno.
+- `cross-encoder/ms-marco-MiniLM-L-6-v2` como reranker opcional con `RERANK_ENABLED=true`.
+
+La generación de respuesta queda en proveedores LLM configurables (`google`, `anthropic`,
+`bedrock`, `ollama`) porque esa etapa exige mayor calidad conversacional y porque el
+fallback multi-proveedor es parte del diseño. Un generador local queda como evolución
+posible si el entorno objetivo dispone de GPU o de un modelo con latencia aceptable.
+
+### Observabilidad de retrieval
+
+Además de logs estructurados con `structlog`, el contrato `POST /chat` devuelve
+`retrieval_trace`, una lista de chunks usados para construir la respuesta:
+
+- `rank`: posición final del chunk.
+- `source_url`: fuente pública recuperada.
+- `distance`: distancia coseno reportada por pgvector.
+- `similarity_score`: aproximación `1 - distance` para lectura humana.
+- `rerank_score`: score del Cross-Encoder cuando el reranker está activo.
+- `content_preview`: fragmento breve para auditoría visual.
+
+Streamlit muestra esta traza en un panel desplegable por respuesta. Esto permite revisar
+si el sistema respondió con evidencia real del índice y no solo con texto generado.
 
 ## Patrones aplicados
 
@@ -338,7 +380,7 @@ Variables principales en `.env`:
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/health` | Estado de API, DB y proveedor configurado. |
-| `POST` | `/chat` | Pregunta/respuesta RAG con `session_id` opcional. |
+| `POST` | `/chat` | Pregunta/respuesta RAG con `session_id` opcional, fuentes y `retrieval_trace`. |
 | `GET` | `/sessions` | Lista conversaciones persistidas. |
 | `GET` | `/sessions/{session_id}/messages` | Carga mensajes de una conversación. |
 | `GET` | `/analytics` | Métricas históricas del chat. |
@@ -395,6 +437,7 @@ Validaciones realizadas durante el desarrollo:
 - Chat real con Gemini y fuentes.
 - Memoria por `session_id` persistida y visible en Streamlit.
 - Analítica visible por Streamlit, API y CLI.
+- Trazabilidad de retrieval visible por respuesta en Streamlit.
 - Docker Compose levantando app + DB en un comando.
 
 ## Limitaciones y Evolución
@@ -428,6 +471,7 @@ El proyecto usa versionado semántico para los hitos de entrega:
 
 - `v1.0.0`: MVP RAG completo.
 - `v1.1.0`: mejora menor con dashboard visual de analítica.
+- `v1.2.0`: trazabilidad de retrieval y refactor modular de Streamlit.
 
 Los cambios relevantes se documentan en [CHANGELOG.md](CHANGELOG.md).
 

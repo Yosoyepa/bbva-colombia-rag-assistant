@@ -7,7 +7,7 @@ Puntos de entrada y **Composition Root**. Ver [contexto global](../../AGENTS.md)
 Exponer el sistema al exterior y **ensamblar** las dependencias:
 
 - `api/` — FastAPI: expone el motor RAG por REST (`/chat`, `/sessions`, `/health`, `/analytics`).
-- `streamlit_app.py` — UI de chat con streaming que **consume la API** (no llama al motor directo).
+- `streamlit_app/` — UI Streamlit que **consume la API** (no llama al motor directo).
 - `cli.py` — entrypoint de ingesta (`bbva-ingest`).
 - `analytics.py` — reporte de métricas del histórico (`bbva-analytics`, CU-04).
 

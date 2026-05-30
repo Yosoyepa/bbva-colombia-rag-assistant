@@ -44,17 +44,29 @@ class PgVectorKnowledgeRepository(VectorKnowledgeRepository):
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, content_cleaned, source_url
+                SELECT
+                    id,
+                    content_cleaned,
+                    source_url,
+                    vector_embedding <=> %s::vector AS distance
                 FROM document_chunks
-                ORDER BY vector_embedding <=> %s::vector
+                ORDER BY distance ASC
                 LIMIT %s
                 """,
                 (vector_literal, top_k),
             )
             rows = cur.fetchall()
         return [
-            Chunk(id=row[0], content=row[1], source_url=row[2], embedding=[])
-            for row in rows
+            Chunk(
+                id=row[0],
+                content=row[1],
+                source_url=row[2],
+                embedding=[],
+                rank=index,
+                distance=float(row[3]),
+                similarity_score=1.0 - float(row[3]),
+            )
+            for index, row in enumerate(rows, start=1)
         ]
 
     def count(self) -> int:
