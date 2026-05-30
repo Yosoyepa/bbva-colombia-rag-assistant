@@ -1,0 +1,55 @@
+{
+  "plugins": {
+    "bld-token-cost-efficiency": {
+      "enabled": true,
+      "rtk": {
+        "enabled": true,
+        "globalHooks": true
+      },
+      "hooks": {
+        "log-filter": {
+          "enabled": true,
+          "rules": [
+            "npm",
+            "yarn",
+            "cargo",
+            "git",
+            "docker"
+          ]
+        },
+        "read-once": {
+          "enabled": true,
+          "ttl": 3600
+        },
+        "session-context": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "permissions": {
+    "default": "ask",
+    "allowlist": {
+      "Bash": [
+        "git status",
+        "git log",
+        "git diff",
+        "ls",
+        "find",
+        "grep",
+        "cat",
+        "pwd",
+        "echo",
+        "mkdir",
+        "rm",
+        "cp",
+        "mv"
+      ]
+    }
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "context": {
+    "maxTokens": 200000,
+    "preferPipeline": true
+  }
+}
