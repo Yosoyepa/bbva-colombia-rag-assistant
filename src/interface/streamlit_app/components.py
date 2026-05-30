@@ -57,11 +57,13 @@ def render_chat_tab(client: ApiClient) -> None:
                 st.markdown(data["content"])
                 _render_sources(data.get("sources", []))
                 _render_retrieval_trace(data.get("retrieval_trace", []))
+                _render_observability(data.get("observability"))
                 append_message(
                     "assistant",
                     data["content"],
                     sources=data.get("sources", []),
                     retrieval_trace=data.get("retrieval_trace", []),
+                    observability=data.get("observability"),
                 )
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Error consultando la API: {exc}")
@@ -110,6 +112,7 @@ def _render_message(message: dict) -> None:
         st.markdown(message["content"])
         _render_sources(message.get("sources", []))
         _render_retrieval_trace(message.get("retrieval_trace", []))
+        _render_observability(message.get("observability"))
 
 
 def _render_sources(sources: list[str]) -> None:
@@ -129,6 +132,9 @@ def _render_retrieval_trace(trace: list[dict]) -> None:
                 "similarity_score": _round_or_none(item.get("similarity_score")),
                 "distance": _round_or_none(item.get("distance")),
                 "rerank_score": _round_or_none(item.get("rerank_score")),
+                "dense_score": _round_or_none(item.get("dense_score")),
+                "bm25_score": _round_or_none(item.get("bm25_score")),
+                "hybrid_score": _round_or_none(item.get("hybrid_score")),
             }
             for item in trace
         ]
@@ -136,6 +142,24 @@ def _render_retrieval_trace(trace: list[dict]) -> None:
         for item in trace:
             st.markdown(f"**#{item.get('rank')} · {item.get('source_url')}**")
             st.caption(item.get("content_preview", ""))
+
+
+def _render_observability(observability: dict | None) -> None:
+    if not observability:
+        return
+    with st.expander("Observabilidad", expanded=False):
+        cols = st.columns(4)
+        cols[0].metric("Total", f"{observability.get('total_latency_ms', 0):.1f} ms")
+        cols[1].metric("Retrieval", f"{observability.get('retrieval_latency_ms', 0):.1f} ms")
+        cols[2].metric("LLM", f"{observability.get('llm_latency_ms', 0):.1f} ms")
+        cols[3].metric(
+            "Persistencia",
+            f"{observability.get('persistence_latency_ms', 0):.1f} ms",
+        )
+        st.caption(
+            f"Proveedor: {observability.get('provider') or 'n/a'} · "
+            f"cache_hit={observability.get('cache_hit', False)}"
+        )
 
 
 def _render_recent_sessions(client: ApiClient) -> None:

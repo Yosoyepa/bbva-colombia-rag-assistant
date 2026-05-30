@@ -18,6 +18,37 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 CREATE INDEX IF NOT EXISTS idx_document_chunks_hnsw
     ON document_chunks USING hnsw (vector_embedding vector_cosine_ops);
 
+-- Índice textual para retrieval híbrido BM25+denso (v1.3.0).
+CREATE INDEX IF NOT EXISTS idx_document_chunks_fts
+    ON document_chunks USING gin (to_tsvector('spanish', content_cleaned));
+
+-- Cache persistente de embeddings. VECTOR(384) sigue la dimensión por defecto.
+CREATE TABLE IF NOT EXISTS embedding_cache (
+    cache_key        TEXT PRIMARY KEY,
+    model_name       TEXT NOT NULL,
+    text_hash        TEXT NOT NULL,
+    vector_embedding VECTOR(384) NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Cache opt-in de respuestas conversacionales.
+CREATE TABLE IF NOT EXISTS answer_cache (
+    cache_key       TEXT PRIMARY KEY,
+    content         TEXT NOT NULL,
+    sources         TEXT[] NOT NULL DEFAULT '{}',
+    retrieval_trace JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Registro de frescura/cambios del scraping.
+CREATE TABLE IF NOT EXISTS scraped_pages (
+    source_url   TEXT PRIMARY KEY,
+    content_hash TEXT NOT NULL,
+    fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    changed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    status       VARCHAR(24) NOT NULL DEFAULT 'new'
+);
+
 -- Sesiones de chat (CU-03).
 CREATE TABLE IF NOT EXISTS chat_sessions (
     session_id  UUID PRIMARY KEY,

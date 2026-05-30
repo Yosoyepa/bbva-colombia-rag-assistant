@@ -25,7 +25,12 @@ class IngestDataUseCase:
         self._embedder = embedder
         self._knowledge_repo = knowledge_repo
 
-    def execute(self, chunks: list[Chunk], documents_scraped: int = 0) -> IngestResult:
+    def execute(
+        self,
+        chunks: list[Chunk],
+        documents_scraped: int = 0,
+        replace_source_urls: list[str] | None = None,
+    ) -> IngestResult:
         """Embeber los chunks limpios (en lote) e indexarlos en el vector repo.
 
         El scraping + limpieza + chunking (infrastructure/scraping) producen los
@@ -35,7 +40,10 @@ class IngestDataUseCase:
             vectors = self._embedder.embed_batch([c.content for c in chunks])
             for chunk, vector in zip(chunks, vectors, strict=True):
                 chunk.embedding = vector
-            self._knowledge_repo.add_chunks(chunks)
+            if replace_source_urls:
+                self._knowledge_repo.replace_chunks(chunks, replace_source_urls)
+            else:
+                self._knowledge_repo.add_chunks(chunks)
         return IngestResult(
             documents_scraped=documents_scraped,
             chunks_indexed=len(chunks),
