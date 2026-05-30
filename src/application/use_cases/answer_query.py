@@ -19,6 +19,7 @@ from src.domain.entities import ChatMessage, Chunk
 @dataclass
 class Answer:
     """Respuesta anclada: texto + las fuentes (URLs) que la soportan."""
+    session_id: UUID
     content: str
     sources: list[str] = field(default_factory=list)
     used_chunks: list[Chunk] = field(default_factory=list)
@@ -63,6 +64,7 @@ class AnswerQueryUseCase:
             ChatMessage(session_id=session.id, role="assistant", content=content)
         )
         return Answer(
+            session_id=session.id,
             content=content,
             sources=PromptBuilder.sources_of(context),
             used_chunks=context,
