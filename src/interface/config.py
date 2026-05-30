@@ -38,14 +38,22 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 120
     top_k: int = 5
+    retrieval_mode: str = "dense"
+    hybrid_bm25_weight: float = 0.35
+    hybrid_dense_weight: float = 0.65
     rerank_enabled: bool = False
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    embedding_cache_enabled: bool = True
+    answer_cache_enabled: bool = False
+    answer_cache_ttl_seconds: int = 3600
 
     # Memoria
     n_history_messages: int = 6
 
     # Scraping
     scrape_base_url: str = "https://www.bbva.com.co/"
+    scrape_freshness_hours: int = 24
+    rescrape_changed_only: bool = True
 
     # PostgreSQL + pgvector
     pg_host: str = "localhost"
