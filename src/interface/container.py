@@ -35,13 +35,15 @@ class Container:
 
     @property
     def llm(self):
-        """LLM construido bajo demanda (Factory) — falla claro si falta la API key."""
+        """LLM construido bajo demanda: cadena de fallback (activo + respaldos) con
+        Circuit Breaker por proveedor. Falla claro si ninguno tiene credenciales."""
         if self._llm is None:
             from src.infrastructure.llm import LLMFactory
 
             s = self.settings
-            self._llm = LLMFactory.create(
-                provider=s.model_provider,
+            self._llm = LLMFactory.create_with_fallback(
+                active_provider=s.model_provider,
+                fallback_order=s.fallback_order,
                 model=s.llm_model,
                 google_api_key=s.google_api_key,
                 anthropic_api_key=s.anthropic_api_key,
