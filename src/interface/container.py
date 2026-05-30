@@ -24,15 +24,23 @@ class Container:
         self._embedder = None
         self._knowledge_repo = None
         self._memory_repo = None
+        self._cache_repo = None
         self._retrieval = None
         self._llm = None
 
     @property
     def embedder(self):
         if self._embedder is None:
-            from src.infrastructure.embeddings import SentenceTransformerEmbedder
+            from src.infrastructure.embeddings import CachedEmbedder, SentenceTransformerEmbedder
 
-            self._embedder = SentenceTransformerEmbedder(self.settings.embedding_model)
+            embedder = SentenceTransformerEmbedder(self.settings.embedding_model)
+            if self.settings.embedding_cache_enabled:
+                embedder = CachedEmbedder(
+                    embedder,
+                    self.cache_repo,
+                    model_name=self.settings.embedding_model,
+                )
+            self._embedder = embedder
         return self._embedder
 
     @property
@@ -52,15 +60,30 @@ class Container:
         return self._memory_repo
 
     @property
+    def cache_repo(self):
+        if self._cache_repo is None:
+            from src.infrastructure.persistence import PgCacheRepository
+
+            self._cache_repo = PgCacheRepository(self.pool)
+        return self._cache_repo
+
+    @property
     def retrieval(self):
         if self._retrieval is None:
-            from src.infrastructure.retrieval import DenseRetrieval, RerankRetrieval
+            from src.infrastructure.retrieval import DenseRetrieval, HybridRetrieval, RerankRetrieval
 
             if self.settings.rerank_enabled:
                 self._retrieval = RerankRetrieval(
                     self.embedder,
                     self.knowledge_repo,
                     model_name=self.settings.rerank_model,
+                )
+            elif self.settings.retrieval_mode.lower() == "hybrid":
+                self._retrieval = HybridRetrieval(
+                    self.embedder,
+                    self.knowledge_repo,
+                    dense_weight=self.settings.hybrid_dense_weight,
+                    bm25_weight=self.settings.hybrid_bm25_weight,
                 )
             else:
                 self._retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
@@ -98,6 +121,14 @@ class Container:
             memory=self.memory_repo,
             top_k=self.settings.top_k,
             n_history_messages=self.settings.n_history_messages,
+            answer_cache=self.cache_repo,
+            answer_cache_enabled=self.settings.answer_cache_enabled,
+            answer_cache_ttl_seconds=self.settings.answer_cache_ttl_seconds,
+            cache_namespace=(
+                f"{self.settings.llm_model}:"
+                f"{self.settings.retrieval_mode}:"
+                f"{self.knowledge_repo.corpus_version()}"
+            ),
         )
 
     def ingest_use_case(self) -> IngestDataUseCase:

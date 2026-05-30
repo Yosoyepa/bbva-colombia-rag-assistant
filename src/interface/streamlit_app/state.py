@@ -24,6 +24,7 @@ def set_conversation(session_id: str, messages: list[dict]) -> None:
             "content": item["content"],
             "sources": item.get("sources", []),
             "retrieval_trace": item.get("retrieval_trace", []),
+            "observability": item.get("observability"),
         }
         for item in messages
         if item["role"] in {"user", "assistant"}
@@ -35,6 +36,7 @@ def append_message(
     content: str,
     sources: list[str] | None = None,
     retrieval_trace: list[dict] | None = None,
+    observability: dict | None = None,
 ) -> None:
     st.session_state.messages.append(
         {
@@ -42,6 +44,7 @@ def append_message(
             "content": content,
             "sources": sources or [],
             "retrieval_trace": retrieval_trace or [],
+            "observability": observability,
         }
     )
 

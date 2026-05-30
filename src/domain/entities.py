@@ -23,6 +23,9 @@ class Chunk:
     distance: float | None = None
     similarity_score: float | None = None
     rerank_score: float | None = None
+    dense_score: float | None = None
+    bm25_score: float | None = None
+    hybrid_score: float | None = None
 
 
 @dataclass

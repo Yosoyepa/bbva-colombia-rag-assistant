@@ -22,7 +22,20 @@ class RetrievalTraceItem(BaseModel):
     distance: float | None = None
     similarity_score: float | None = None
     rerank_score: float | None = None
+    dense_score: float | None = None
+    bm25_score: float | None = None
+    hybrid_score: float | None = None
     content_preview: str
+
+
+class ChatObservabilityResponse(BaseModel):
+    total_latency_ms: float
+    retrieval_latency_ms: float
+    prompt_latency_ms: float
+    llm_latency_ms: float
+    persistence_latency_ms: float
+    provider: str | None = None
+    cache_hit: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -30,6 +43,7 @@ class ChatResponse(BaseModel):
     content: str
     sources: list[str]
     retrieval_trace: list[RetrievalTraceItem] = Field(default_factory=list)
+    observability: ChatObservabilityResponse | None = None
 
 
 class SessionSummaryResponse(BaseModel):

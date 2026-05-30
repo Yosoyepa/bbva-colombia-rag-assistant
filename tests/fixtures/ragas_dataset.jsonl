@@ -1,0 +1,8 @@
+{"question":"¿Qué entidad cubre el asistente?","answer":"BBVA Colombia.","contexts":["El asistente responde sobre información pública de BBVA Colombia."],"ground_truth":"BBVA Colombia"}
+{"question":"¿Qué debe hacer si el contexto no contiene la respuesta?","answer":"Debe indicar que no encontró información confiable.","contexts":["Si la respuesta no está soportada, el asistente no debe inventar."],"ground_truth":"No inventar información"}
+{"question":"¿Qué fuente debe citar una respuesta?","answer":"Debe citar URLs recuperadas del corpus.","contexts":["Las respuestas del asistente se anclan a fuentes recuperadas."],"ground_truth":"Citar fuentes"}
+{"question":"¿Cómo se mantiene la memoria?","answer":"Mediante sesiones UUID persistidas.","contexts":["El sistema usa session_id para recuperar los últimos mensajes."],"ground_truth":"Memoria por session_id"}
+{"question":"¿Qué base almacena vectores?","answer":"PostgreSQL con pgvector.","contexts":["Los chunks se indexan en PostgreSQL + pgvector."],"ground_truth":"PostgreSQL pgvector"}
+{"question":"¿Qué modelo produce embeddings?","answer":"Un modelo sentence-transformers local.","contexts":["Los embeddings se generan localmente con sentence-transformers."],"ground_truth":"sentence-transformers"}
+{"question":"¿Cómo se mejora la resiliencia LLM?","answer":"Con fallback y Circuit Breaker.","contexts":["La cadena de proveedores usa Chain of Responsibility y Circuit Breaker."],"ground_truth":"Fallback y Circuit Breaker"}
+{"question":"¿Qué mide la observabilidad?","answer":"Latencias por etapa, proveedor y cache hit.","contexts":["La observabilidad registra tiempos de retrieval, LLM, persistencia y total."],"ground_truth":"Latencias por etapa"}
