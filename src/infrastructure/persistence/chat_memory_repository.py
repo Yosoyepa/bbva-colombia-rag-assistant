@@ -10,7 +10,7 @@ import structlog
 from psycopg_pool import ConnectionPool
 
 from src.application.ports import ChatMemoryRepository
-from src.domain.entities import ChatMessage, ChatSession
+from src.domain.entities import ChatMessage, ChatSession, ChatSessionSummary
 
 log = structlog.get_logger(__name__)
 
@@ -75,6 +75,46 @@ class PgChatMemoryRepository(ChatMemoryRepository):
                 created_at=r[5],
             )
             for r in rows
+        ]
+
+    def list_sessions(self, limit: int = 20) -> list[ChatSessionSummary]:
+        with self._pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    s.session_id,
+                    s.created_at,
+                    stats.updated_at,
+                    COALESCE(stats.message_count, 0) AS message_count,
+                    COALESCE(first_user.content, 'Conversación sin mensajes') AS title
+                FROM chat_sessions s
+                LEFT JOIN LATERAL (
+                    SELECT max(created_at) AS updated_at, count(*)::int AS message_count
+                    FROM chat_messages cm
+                    WHERE cm.session_id = s.session_id
+                ) stats ON true
+                LEFT JOIN LATERAL (
+                    SELECT content
+                    FROM chat_messages cm
+                    WHERE cm.session_id = s.session_id AND cm.message_role = 'user'
+                    ORDER BY cm.created_at ASC
+                    LIMIT 1
+                ) first_user ON true
+                ORDER BY COALESCE(stats.updated_at, s.created_at) DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+        return [
+            ChatSessionSummary(
+                id=row[0],
+                created_at=row[1],
+                updated_at=row[2],
+                message_count=row[3],
+                title=row[4],
+            )
+            for row in rows
         ]
 
     def count_sessions(self) -> int:

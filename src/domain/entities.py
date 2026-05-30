@@ -28,6 +28,15 @@ class ChatSession:
 
 
 @dataclass
+class ChatSessionSummary:
+    id: UUID
+    created_at: datetime
+    updated_at: datetime | None
+    message_count: int
+    title: str
+
+
+@dataclass
 class ChatMessage:
     session_id: UUID
     role: str          # "user" | "assistant" | "system"

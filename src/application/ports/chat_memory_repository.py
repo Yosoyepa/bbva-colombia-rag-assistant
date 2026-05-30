@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from src.domain.entities import ChatMessage, ChatSession
+from src.domain.entities import ChatMessage, ChatSession, ChatSessionSummary
 
 
 class ChatMemoryRepository(ABC):
@@ -27,6 +27,11 @@ class ChatMemoryRepository(ABC):
 
         `limit` proviene de N_HISTORY_MESSAGES (config externalizada).
         """
+        ...
+
+    @abstractmethod
+    def list_sessions(self, limit: int = 20) -> list[ChatSessionSummary]:
+        """Sesiones recientes con título de preview y conteo de mensajes."""
         ...
 
     # ── Agregaciones para analítica del histórico (CU-04) ──────────────────────

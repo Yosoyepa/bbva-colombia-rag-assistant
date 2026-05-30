@@ -12,6 +12,35 @@ import streamlit as st
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
+
+def _short_id(session_id: str | None) -> str:
+    if not session_id:
+        return "sin sesión"
+    return session_id.split("-")[0]
+
+
+def _short_title(title: str, max_chars: int = 42) -> str:
+    clean = " ".join(title.split())
+    if len(clean) <= max_chars:
+        return clean
+    return clean[: max_chars - 1].rstrip() + "…"
+
+
+def _load_session(session_id: str) -> None:
+    resp = httpx.get(f"{API_URL}/sessions/{session_id}/messages", timeout=10)
+    resp.raise_for_status()
+    st.session_state.session_id = session_id
+    st.session_state.messages = [
+        {
+            "role": item["role"],
+            "content": item["content"],
+            "sources": item.get("sources", []),
+        }
+        for item in resp.json()
+        if item["role"] in {"user", "assistant"}
+    ]
+
+
 st.set_page_config(page_title="Asistente BBVA", page_icon="💬")
 st.title("💬 Asistente BBVA Colombia")
 st.caption("RAG sobre información pública de bbva.com.co — respuestas ancladas a fuentes.")
@@ -33,6 +62,29 @@ with st.sidebar:
         st.session_state.session_id = None
         st.session_state.messages = []
         st.rerun()
+
+    st.divider()
+    st.subheader("Conversaciones")
+    st.caption(f"Actual: `{_short_id(st.session_state.session_id)}`")
+    try:
+        sessions = httpx.get(f"{API_URL}/sessions", params={"limit": 20}, timeout=10).json()
+        if not sessions:
+            st.caption("Aún no hay conversaciones guardadas.")
+        for item in sessions:
+            sid = item["session_id"]
+            selected = sid == st.session_state.session_id
+            label = f"{_short_title(item['title'])} ({item['message_count']})"
+            if st.button(
+                label,
+                key=f"session-{sid}",
+                type="primary" if selected else "secondary",
+                use_container_width=True,
+                help=sid,
+            ):
+                _load_session(sid)
+                st.rerun()
+    except Exception as exc:  # noqa: BLE001
+        st.warning(f"No pude cargar conversaciones: {exc}")
 
 # Historial en pantalla.
 for m in st.session_state.messages:
