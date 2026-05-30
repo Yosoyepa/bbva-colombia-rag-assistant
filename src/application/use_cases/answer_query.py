@@ -12,7 +12,8 @@ from src.application.ports import (
     LargeLanguageModel,
     RetrievalStrategy,
 )
-from src.domain.entities import Chunk
+from src.application.prompt_builder import PromptBuilder
+from src.domain.entities import ChatMessage, Chunk
 
 
 @dataclass
@@ -39,9 +40,30 @@ class AnswerQueryUseCase:
         self._n_history_messages = n_history_messages
 
     def execute(self, session_id: UUID, query: str) -> Answer:
-        """Recuperar contexto + historial, construir prompt, generar respuesta.
+        """Recuperar contexto + historial, construir prompt, generar respuesta anclada."""
+        session = self._memory.get_or_create_session(session_id)
 
-        TODO(Fase 1): retrieve top-K → PromptBuilder(system + N msgs + contexto +
-        query) → llm.generate → anclar fuentes → persistir mensajes en memoria.
-        """
-        raise NotImplementedError
+        # 1) Contexto relevante (Strategy: dense/rerank).
+        context = self._retrieval.retrieve(query, self._top_k)
+
+        # 2) Ventana de N mensajes previos (CU-03) + la pregunta actual.
+        history = self._memory.get_recent_messages(session.id, self._n_history_messages)
+        user_msg = ChatMessage(session_id=session.id, role="user", content=query)
+        messages = history + [user_msg]
+
+        # 3) System prompt defensivo con el contexto embebido (Builder).
+        system_prompt = PromptBuilder.build_system(context)
+
+        # 4) Generar (Factory + fallback transparente).
+        content = self._llm.generate(system_prompt, messages)
+
+        # 5) Persistir el turno (memoria) y anclar fuentes.
+        self._memory.add_message(user_msg)
+        self._memory.add_message(
+            ChatMessage(session_id=session.id, role="assistant", content=content)
+        )
+        return Answer(
+            content=content,
+            sources=PromptBuilder.sources_of(context),
+            used_chunks=context,
+        )
