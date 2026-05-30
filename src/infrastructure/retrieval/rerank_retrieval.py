@@ -47,4 +47,9 @@ class RerankRetrieval(RetrievalStrategy):
             key=lambda item: float(item[1]),
             reverse=True,
         )
-        return [chunk for chunk, _score in ranked[:top_k]]
+        result = []
+        for rank, (chunk, score) in enumerate(ranked[:top_k], start=1):
+            chunk.rank = rank
+            chunk.rerank_score = float(score)
+            result.append(chunk)
+        return result

@@ -16,10 +16,20 @@ class ChatRequest(BaseModel):
     session_id: UUID | None = None
 
 
+class RetrievalTraceItem(BaseModel):
+    rank: int | None = None
+    source_url: str
+    distance: float | None = None
+    similarity_score: float | None = None
+    rerank_score: float | None = None
+    content_preview: str
+
+
 class ChatResponse(BaseModel):
     session_id: UUID
     content: str
     sources: list[str]
+    retrieval_trace: list[RetrievalTraceItem] = Field(default_factory=list)
 
 
 class SessionSummaryResponse(BaseModel):

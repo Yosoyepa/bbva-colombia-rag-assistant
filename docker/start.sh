@@ -6,7 +6,7 @@ export API_URL="${API_URL:-http://localhost:8000}"
 uvicorn src.interface.api.app:app --host 0.0.0.0 --port "${API_PORT:-8000}" &
 api_pid=$!
 
-streamlit run src/interface/streamlit_app.py \
+streamlit run src/interface/streamlit_app/app.py \
   --server.address 0.0.0.0 \
   --server.port "${STREAMLIT_PORT:-8501}" \
   --browser.gatherUsageStats false &

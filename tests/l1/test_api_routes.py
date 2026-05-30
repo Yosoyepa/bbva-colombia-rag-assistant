@@ -3,7 +3,8 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from src.domain.entities import ChatMessage, ChatSessionSummary
+from src.application.use_cases.answer_query import Answer
+from src.domain.entities import ChatMessage, ChatSessionSummary, Chunk
 from src.interface.api.app import create_app
 
 
@@ -44,10 +45,34 @@ class FakeMemory:
         ]
 
 
+class FakeAnswerUseCase:
+    def __init__(self, session_id):
+        self._session_id = session_id
+
+    def execute(self, session_id, message):
+        chunk = Chunk(
+            content="Contenido trazable de BBVA Colombia para empresas.",
+            source_url="https://www.bbva.com.co/empresas",
+            rank=1,
+            distance=0.12,
+            similarity_score=0.88,
+            rerank_score=1.5,
+        )
+        return Answer(
+            session_id=session_id or self._session_id,
+            content="Respuesta anclada.",
+            sources=[chunk.source_url],
+            used_chunks=[chunk],
+        )
+
+
 class FakeContainer:
     def __init__(self):
         self.settings = FakeSettings()
         self.memory_repo = FakeMemory()
+
+    def answer_use_case(self):
+        return FakeAnswerUseCase(self.memory_repo.session_id)
 
     def db_healthy(self) -> bool:
         return True
@@ -74,6 +99,20 @@ def test_sessions_routes_expose_persisted_conversations():
         messages = client.get(f"/sessions/{session_id}/messages")
         assert messages.status_code == 200
         assert [item["role"] for item in messages.json()] == ["user", "assistant"]
+
+
+def test_chat_route_exposes_retrieval_trace_without_breaking_sources():
+    container = FakeContainer()
+    app = create_app(lambda: container)
+
+    with TestClient(app) as client:
+        response = client.post("/chat", json={"message": "Que ofrece BBVA?"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sources"] == ["https://www.bbva.com.co/empresas"]
+    assert payload["retrieval_trace"][0]["rank"] == 1
+    assert payload["retrieval_trace"][0]["similarity_score"] == 0.88
 
 
 def test_global_error_handler_maps_provider_configuration_errors():

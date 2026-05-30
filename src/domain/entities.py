@@ -19,6 +19,10 @@ class Chunk:
     source_url: str
     embedding: list[float] = field(default_factory=list)
     id: UUID = field(default_factory=uuid4)
+    rank: int | None = None
+    distance: float | None = None
+    similarity_score: float | None = None
+    rerank_score: float | None = None
 
 
 @dataclass
