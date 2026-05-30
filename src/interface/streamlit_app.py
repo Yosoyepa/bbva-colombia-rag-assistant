@@ -41,6 +41,12 @@ def _load_session(session_id: str) -> None:
     ]
 
 
+def _load_analytics() -> dict:
+    resp = httpx.get(f"{API_URL}/analytics", timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
 st.set_page_config(page_title="Asistente BBVA", page_icon="💬")
 st.title("💬 Asistente BBVA Colombia")
 st.caption("RAG sobre información pública de bbva.com.co — respuestas ancladas a fuentes.")
@@ -86,33 +92,60 @@ with st.sidebar:
     except Exception as exc:  # noqa: BLE001
         st.warning(f"No pude cargar conversaciones: {exc}")
 
-# Historial en pantalla.
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
-        if m.get("sources"):
-            st.caption("Fuentes: " + ", ".join(m["sources"]))
+chat_tab, analytics_tab = st.tabs(["Chat", "Analítica"])
 
-# Entrada del usuario.
-if prompt := st.chat_input("Pregunta sobre BBVA…"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+with chat_tab:
+    # Historial en pantalla.
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+            if m.get("sources"):
+                st.caption("Fuentes: " + ", ".join(m["sources"]))
 
-    with st.chat_message("assistant"):
-        try:
-            payload = {"message": prompt}
-            if st.session_state.session_id:
-                payload["session_id"] = st.session_state.session_id
-            resp = httpx.post(f"{API_URL}/chat", json=payload, timeout=120)
-            resp.raise_for_status()
-            data = resp.json()
-            st.session_state.session_id = data["session_id"]
-            st.markdown(data["content"])
-            if data.get("sources"):
-                st.caption("Fuentes: " + ", ".join(data["sources"]))
-            st.session_state.messages.append(
-                {"role": "assistant", "content": data["content"], "sources": data.get("sources", [])}
-            )
-        except Exception as exc:  # noqa: BLE001
-            st.error(f"Error consultando la API: {exc}")
+    # Entrada del usuario.
+    if prompt := st.chat_input("Pregunta sobre BBVA…"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            try:
+                payload = {"message": prompt}
+                if st.session_state.session_id:
+                    payload["session_id"] = st.session_state.session_id
+                resp = httpx.post(f"{API_URL}/chat", json=payload, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+                st.session_state.session_id = data["session_id"]
+                st.markdown(data["content"])
+                if data.get("sources"):
+                    st.caption("Fuentes: " + ", ".join(data["sources"]))
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": data["content"],
+                        "sources": data.get("sources", []),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"Error consultando la API: {exc}")
+
+with analytics_tab:
+    st.subheader("Observabilidad del MVP")
+    st.caption("Métricas calculadas desde el histórico persistido de conversaciones.")
+    try:
+        report = _load_analytics()
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Sesiones", report["total_sessions"])
+        col2.metric("Mensajes", report["total_messages"])
+        col3.metric("Promedio por sesión", f"{report['avg_messages_per_session']:.2f}")
+
+        st.subheader("Fuentes más citadas")
+        top_sources = report.get("top_sources", [])
+        if top_sources:
+            st.dataframe(top_sources, use_container_width=True, hide_index=True)
+            st.bar_chart(top_sources, x="source_url", y="citations")
+        else:
+            st.info("Aún no hay fuentes citadas por respuestas del asistente.")
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"No pude cargar la analítica: {exc}")
