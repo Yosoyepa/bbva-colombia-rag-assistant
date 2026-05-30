@@ -6,7 +6,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from src.interface.api.dependencies import get_container
-from src.interface.api.schemas import ChatRequest, ChatResponse, RetrievalTraceItem
+from src.interface.api.schemas import (
+    ChatObservabilityResponse,
+    ChatRequest,
+    ChatResponse,
+    RetrievalTraceItem,
+)
 from src.interface.container import Container
 
 router = APIRouter(tags=["chat"])
@@ -37,8 +42,20 @@ def chat(
                 distance=chunk.distance,
                 similarity_score=chunk.similarity_score,
                 rerank_score=chunk.rerank_score,
+                dense_score=chunk.dense_score,
+                bm25_score=chunk.bm25_score,
+                hybrid_score=chunk.hybrid_score,
                 content_preview=_preview(chunk.content),
             )
             for index, chunk in enumerate(answer.used_chunks, start=1)
         ],
+        observability=ChatObservabilityResponse(
+            total_latency_ms=answer.observability.total_latency_ms,
+            retrieval_latency_ms=answer.observability.retrieval_latency_ms,
+            prompt_latency_ms=answer.observability.prompt_latency_ms,
+            llm_latency_ms=answer.observability.llm_latency_ms,
+            persistence_latency_ms=answer.observability.persistence_latency_ms,
+            provider=answer.observability.provider,
+            cache_hit=answer.observability.cache_hit,
+        ),
     )
