@@ -36,14 +36,16 @@ class PgChatMemoryRepository(ChatMemoryRepository):
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO chat_messages (id, session_id, message_role, content, created_at)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO chat_messages
+                    (id, session_id, message_role, content, sources, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 (
                     str(message.id),
                     str(message.session_id),
                     message.role,
                     message.content,
+                    list(message.sources),  # psycopg adapta list[str] → TEXT[]
                     message.created_at,
                 ),
             )
@@ -53,7 +55,7 @@ class PgChatMemoryRepository(ChatMemoryRepository):
             # Últimos `limit` por tiempo descendente; se invierten a orden cronológico.
             cur.execute(
                 """
-                SELECT id, session_id, message_role, content, created_at
+                SELECT id, session_id, message_role, content, sources, created_at
                 FROM chat_messages
                 WHERE session_id = %s
                 ORDER BY created_at DESC
@@ -65,7 +67,39 @@ class PgChatMemoryRepository(ChatMemoryRepository):
         rows.reverse()
         return [
             ChatMessage(
-                id=r[0], session_id=r[1], role=r[2], content=r[3], created_at=r[4]
+                id=r[0],
+                session_id=r[1],
+                role=r[2],
+                content=r[3],
+                sources=list(r[4] or []),
+                created_at=r[5],
             )
             for r in rows
         ]
+
+    def count_sessions(self) -> int:
+        with self._pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM chat_sessions")
+            return cur.fetchone()[0]
+
+    def count_messages(self) -> int:
+        with self._pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM chat_messages")
+            return cur.fetchone()[0]
+
+    def top_sources(self, limit: int = 10) -> list[tuple[str, int]]:
+        with self._pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source_url, count(*) AS citations
+                FROM chat_messages
+                CROSS JOIN LATERAL unnest(sources) AS source_url
+                WHERE message_role = 'assistant'
+                GROUP BY source_url
+                ORDER BY citations DESC, source_url ASC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+        return [(row[0], row[1]) for row in rows]

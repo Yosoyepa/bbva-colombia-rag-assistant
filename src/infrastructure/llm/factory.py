@@ -24,6 +24,9 @@ class LLMFactory:
         provider: str,
         model: str,
         *,
+        google_model: str = "",
+        anthropic_model: str = "",
+        ollama_model: str = "",
         google_api_key: str = "",
         anthropic_api_key: str = "",
         aws_access_key_id: str = "",
@@ -37,11 +40,11 @@ class LLMFactory:
         if provider == "google":
             from src.infrastructure.llm.gemini_client import GeminiClient
 
-            return GeminiClient(api_key=google_api_key, model=model)
+            return GeminiClient(api_key=google_api_key, model=google_model or model)
         if provider == "anthropic":
             from src.infrastructure.llm.anthropic_client import AnthropicClient
 
-            return AnthropicClient(api_key=anthropic_api_key, model=model)
+            return AnthropicClient(api_key=anthropic_api_key, model=anthropic_model or model)
         if provider == "bedrock":
             from src.infrastructure.llm.bedrock_client import BedrockClient
 
@@ -54,7 +57,7 @@ class LLMFactory:
         if provider == "ollama":
             from src.infrastructure.llm.ollama_client import OllamaClient
 
-            return OllamaClient(host=ollama_host, model=model)
+            return OllamaClient(host=ollama_host, model=ollama_model or model)
         raise ValueError(f"MODEL_PROVIDER desconocido: '{provider}'")
 
     @staticmethod

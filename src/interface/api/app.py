@@ -35,6 +35,18 @@ class HealthResponse(BaseModel):
     provider: str
 
 
+class SourceMetric(BaseModel):
+    source_url: str
+    citations: int
+
+
+class AnalyticsResponse(BaseModel):
+    total_sessions: int
+    total_messages: int
+    avg_messages_per_session: float
+    top_sources: list[SourceMetric]
+
+
 # ── App ─────────────────────────────────────────────────────────────────────--
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,7 +79,7 @@ def chat(req: ChatRequest) -> ChatResponse:
         use_case = c.answer_use_case()
         # session_id None => el caso de uso crea una sesión nueva.
         sid = req.session_id
-        answer = use_case.execute(sid, req.message)  # type: ignore[arg-type]
+        answer = use_case.execute(sid, req.message)
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
     except ValueError as exc:  # p.ej. GOOGLE_API_KEY ausente
@@ -78,4 +90,23 @@ def chat(req: ChatRequest) -> ChatResponse:
 
     return ChatResponse(
         session_id=answer.session_id, content=answer.content, sources=answer.sources
+    )
+
+
+@app.get("/analytics", response_model=AnalyticsResponse)
+def analytics() -> AnalyticsResponse:
+    c: Container = app.state.container
+    try:
+        report = c.analytics_use_case().execute()
+    except Exception as exc:  # noqa: BLE001
+        log.error("analytics_failed", error=str(exc))
+        raise HTTPException(status_code=503, detail="error leyendo el histórico") from exc
+    return AnalyticsResponse(
+        total_sessions=report.total_sessions,
+        total_messages=report.total_messages,
+        avg_messages_per_session=report.avg_messages_per_session,
+        top_sources=[
+            SourceMetric(source_url=url, citations=count)
+            for url, count in report.top_sources
+        ],
     )

@@ -25,13 +25,18 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
 );
 
 -- Mensajes de chat (CU-03 / CU-04). message_role: user | assistant | system.
+-- `sources` registra las URLs citadas por las respuestas (Log Aggregation) → analítica CU-04.
 CREATE TABLE IF NOT EXISTS chat_messages (
     id           UUID PRIMARY KEY,
     session_id   UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
     message_role VARCHAR(16) NOT NULL,
     content      TEXT NOT NULL,
+    sources      TEXT[] NOT NULL DEFAULT '{}',
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE chat_messages
+    ADD COLUMN IF NOT EXISTS sources TEXT[] NOT NULL DEFAULT '{}';
 
 -- Ventana de últimos N mensajes por sesión (CU-03) y barridos de analítica (CU-04).
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_time
