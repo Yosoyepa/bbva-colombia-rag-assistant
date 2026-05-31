@@ -57,6 +57,11 @@ services:
       ANSWER_CACHE_TTL_SECONDS: ${ANSWER_CACHE_TTL_SECONDS:-3600}
       N_HISTORY_MESSAGES: ${N_HISTORY_MESSAGES:-6}
       SCRAPE_BASE_URL: ${SCRAPE_BASE_URL:-https://www.bbva.com.co/}
+      SCRAPE_START_URLS: ${SCRAPE_START_URLS:-https://www.bbva.com.co/,https://www.bbva.com.co/personas.html,https://www.bbva.com.co/empresas.html}
+      SCRAPE_MAX_PAGES: ${SCRAPE_MAX_PAGES:-40}
+      SCRAPE_MAX_DEPTH: ${SCRAPE_MAX_DEPTH:-3}
+      SCRAPE_ALLOWED_PREFIXES: ${SCRAPE_ALLOWED_PREFIXES:-/personas,/empresas}
+      SCRAPE_EXCLUDE_PATTERNS: ${SCRAPE_EXCLUDE_PATTERNS:-aviso-legal,politica-de-cookies,cookies,legal.html}
       SCRAPE_FRESHNESS_HOURS: ${SCRAPE_FRESHNESS_HOURS:-24}
       RESCRAPE_CHANGED_ONLY: ${RESCRAPE_CHANGED_ONLY:-true}
       PG_HOST: db
