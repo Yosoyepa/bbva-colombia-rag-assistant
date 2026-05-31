@@ -53,6 +53,15 @@ class Settings(BaseSettings):
 
     # Scraping
     scrape_base_url: str = "https://www.bbva.com.co/"
+    scrape_start_urls: str = (
+        "https://www.bbva.com.co/,"
+        "https://www.bbva.com.co/personas.html,"
+        "https://www.bbva.com.co/empresas.html"
+    )
+    scrape_max_pages: int = 40
+    scrape_max_depth: int = 3
+    scrape_allowed_prefixes: str = "/personas,/empresas"
+    scrape_exclude_patterns: str = "aviso-legal,politica-de-cookies,cookies,legal.html"
     scrape_freshness_hours: int = 24
     rescrape_changed_only: bool = True
 
@@ -66,6 +75,24 @@ class Settings(BaseSettings):
     @property
     def fallback_order(self) -> list[str]:
         return [p.strip() for p in self.provider_fallback_order.split(",") if p.strip()]
+
+    @property
+    def scrape_start_url_list(self) -> list[str]:
+        return [url.strip() for url in self.scrape_start_urls.split(",") if url.strip()]
+
+    @property
+    def scrape_allowed_prefix_list(self) -> list[str]:
+        return [
+            prefix.strip() for prefix in self.scrape_allowed_prefixes.split(",") if prefix.strip()
+        ]
+
+    @property
+    def scrape_exclude_pattern_list(self) -> list[str]:
+        return [
+            pattern.strip()
+            for pattern in self.scrape_exclude_patterns.split(",")
+            if pattern.strip()
+        ]
 
     @property
     def pg_dsn(self) -> str:

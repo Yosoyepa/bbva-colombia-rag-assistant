@@ -23,8 +23,10 @@ class VectorKnowledgeRepository(ABC):
             self.delete_by_source(source_url)
         self.add_chunks(chunks)
 
+    @abstractmethod
     def delete_by_source(self, source_url: str) -> None:
         """Eliminar chunks indexados para una URL concreta."""
+        ...
 
     @abstractmethod
     def search(self, query_embedding: list[float], top_k: int) -> list[Chunk]:

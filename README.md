@@ -32,7 +32,7 @@ con adaptadores intercambiables para proveedores LLM, retrieval y persistencia.
 
 | Requisito | Implementación |
 |---|---|
-| Scraping del sitio BBVA Colombia | `SeleniumBase` en modo UC sobre páginas públicas de `bbva.com.co`. |
+| Scraping del sitio BBVA Colombia | `SeleniumBase` en modo UC sobre páginas públicas de `bbva.com.co`, con semillas, profundidad y filtros configurables. |
 | Datos crudos y limpios | Store-and-Forward en `data/raw` y `data/clean`. |
 | Vectorización e índice | Embeddings locales CPU con `sentence-transformers` y búsqueda en PostgreSQL + pgvector. |
 | Interfaz conversacional | Streamlit como UI, consumiendo FastAPI por HTTP. |
@@ -98,13 +98,19 @@ docker compose up --build
 6. Ingestar contenido del sitio:
 
 ```bash
-docker compose exec app bbva-ingest --max-pages 25
+docker compose exec app bbva-ingest --max-pages 40 --max-depth 3
 ```
 
 Para una validación rápida:
 
 ```bash
 docker compose exec app bbva-ingest --max-pages 3
+```
+
+Para una ingesta más representativa del sitio sin volverla agresiva:
+
+```bash
+docker compose exec app bbva-ingest --max-pages 40 --max-depth 3
 ```
 
 ## Uso del sistema
@@ -243,6 +249,13 @@ Resultado:
 - Chunks indexados en `document_chunks`.
 - Índice HNSW sobre `VECTOR(384)`.
 - Registro de frescura en `scraped_pages` para saltar páginas recientes sin cambios.
+- Crawl acotado por `SCRAPE_MAX_PAGES`, `SCRAPE_MAX_DEPTH`, semillas iniciales, prefijos
+  permitidos y patrones excluidos.
+
+El scraper no intenta recorrer todo internet ni todo el sitio bancario. Parte de semillas
+de alto valor (`home`, `personas`, `empresas`), prioriza páginas de productos/servicios,
+filtra archivos y páginas legales repetitivas, y conserva límites explícitos para mantener
+la prueba reproducible.
 
 ### CU-02: Consulta RAG
 
@@ -301,8 +314,10 @@ impacto y trazabilidad.
 | Modelos locales para embedding y reranking | Se ejecutan en CPU para reducir costo y dependencia externa en recuperación. La generación queda en proveedores LLM configurables porque exige mayor calidad conversacional. |
 | Multi-proveedor LLM | El core no queda atado a un SDK. Google, Anthropic, Bedrock y Ollama implementan el mismo port. |
 | Fallback + Circuit Breaker | Aumenta resiliencia ante credenciales faltantes, timeouts o caídas de proveedor. |
+| Estado compartido controlado | El LLM se instancia una vez en el Composition Root, pero la observabilidad de proveedor se mantiene por contexto de ejecución y el Circuit Breaker protege su estado interno. |
 | Cache de embeddings activa | Reduce trabajo repetido en CPU y mantiene los resultados persistidos por modelo/texto. |
 | Cache de respuestas opt-in | Mejora latencia cuando el corpus está estable, pero se desactiva por defecto para no ocultar cambios durante evaluación. |
+| Scraping profundo acotado | Aumenta cobertura con semillas y profundidad, pero mantiene límites de páginas, dominio, prefijos y exclusiones para cuidar tiempo de ejecución y respeto al sitio. |
 | Frescura de scraping | Evita reindexar páginas frescas e idénticas; conserva un CLI manual y deja scheduler externo como decisión operacional. |
 | FastAPI + Streamlit | FastAPI deja contrato REST verificable; Streamlit ofrece UI funcional y rápida para la prueba. |
 | Reranker opt-in | Mejora relevancia, pero consume CPU; por eso se activa con `RERANK_ENABLED=true`. |
@@ -421,6 +436,9 @@ Variables principales en `.env`:
 | `N_HISTORY_MESSAGES` | Ventana de memoria conversacional. |
 | `CHUNK_SIZE`, `CHUNK_OVERLAP` | Parámetros de chunking. |
 | `SCRAPE_BASE_URL` | URL base de scraping. |
+| `SCRAPE_START_URLS` | Semillas iniciales separadas por coma para cubrir secciones relevantes temprano. |
+| `SCRAPE_MAX_PAGES`, `SCRAPE_MAX_DEPTH` | Límites de cobertura del crawl. |
+| `SCRAPE_ALLOWED_PREFIXES`, `SCRAPE_EXCLUDE_PATTERNS` | Política de URLs permitidas/excluidas. |
 | `SCRAPE_FRESHNESS_HOURS`, `RESCRAPE_CHANGED_ONLY` | Política de frescura y detección de cambios. |
 | `PG_*` | Conexión PostgreSQL. |
 
@@ -455,7 +473,7 @@ curl -X POST http://localhost:8000/chat \
 ### CLI
 
 ```bash
-docker compose exec app bbva-ingest --max-pages 25
+docker compose exec app bbva-ingest --max-pages 40 --max-depth 3
 docker compose exec app bbva-ingest --max-pages 3 --freshness-hours 24
 docker compose exec app bbva-ingest --max-pages 3 --force-refresh
 docker compose exec app bbva-analytics
@@ -509,6 +527,9 @@ Validaciones realizadas durante el desarrollo:
 
 - El scraping de sitios bancarios puede verse afectado por WAF o cambios de estructura del
   sitio. SeleniumBase UC reduce el riesgo, pero no elimina la dependencia externa.
+- La cobertura del scraping es intencionalmente acotada. Se priorizan páginas públicas de
+  productos/servicios en `personas` y `empresas`; aumentar `SCRAPE_MAX_PAGES` y
+  `SCRAPE_MAX_DEPTH` mejora cobertura a cambio de tiempo de ejecución y más exposición a WAF.
 - La dimensión `VECTOR(384)` está ligada al modelo de embeddings configurado por defecto;
   cambiar de modelo requiere reindexar.
 - Ollama está soportado, pero en entornos sin GPU puede tener latencia alta.

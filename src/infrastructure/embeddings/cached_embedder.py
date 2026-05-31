@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import hashlib
 
-from src.application.ports import Embedder
+from src.application.ports import Embedder, EmbeddingCacheRepository
 
 
 class CachedEmbedder(Embedder):
-    def __init__(self, wrapped: Embedder, cache, model_name: str) -> None:
+    def __init__(
+        self,
+        wrapped: Embedder,
+        cache: EmbeddingCacheRepository,
+        model_name: str,
+    ) -> None:
         self._wrapped = wrapped
         self._cache = cache
         self._model_name = model_name
