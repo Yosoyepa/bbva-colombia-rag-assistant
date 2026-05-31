@@ -15,6 +15,8 @@ and this project follows semantic versioning for delivery milestones.
 
 ### Changed
 
+- Reranker composition can now wrap dense or hybrid retrieval, preserving BM25/dense/hybrid
+  trace fields while adding `rerank_score`.
 - Split cache/freshness persistence into narrower repositories and ports for answers,
   embeddings and scraped pages.
 - Made LLM fallback provider observability context-local and guarded Circuit Breaker state.

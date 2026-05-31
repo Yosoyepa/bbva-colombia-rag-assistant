@@ -320,7 +320,7 @@ impacto y trazabilidad.
 | Scraping profundo acotado | Aumenta cobertura con semillas y profundidad, pero mantiene límites de páginas, dominio, prefijos y exclusiones para cuidar tiempo de ejecución y respeto al sitio. |
 | Frescura de scraping | Evita reindexar páginas frescas e idénticas; conserva un CLI manual y deja scheduler externo como decisión operacional. |
 | FastAPI + Streamlit | FastAPI deja contrato REST verificable; Streamlit ofrece UI funcional y rápida para la prueba. |
-| Reranker opt-in | Mejora relevancia, pero consume CPU; por eso se activa con `RERANK_ENABLED=true`. |
+| Reranker opt-in | Mejora relevancia, pero consume CPU; por eso se activa con `RERANK_ENABLED=true`. Puede envolver retrieval denso o híbrido sin perder la trazabilidad previa. |
 | Pruebas V&V | Verificación para construcción correcta y validación para atributos de ejecución: sistema, performance, resiliencia, persistencia y calidad RAG. |
 
 ## Modelos locales y observabilidad
@@ -355,6 +355,8 @@ Además de logs estructurados con `structlog`, el contrato `POST /chat` devuelve
 
 Streamlit muestra esta traza en un panel desplegable por respuesta. Esto permite revisar
 si el sistema respondió con evidencia real del índice y no solo con texto generado.
+Si se configura `RETRIEVAL_MODE=hybrid` y `RERANK_ENABLED=true`, la traza muestra primero
+los scores denso/BM25/híbrido y luego el `rerank_score` aplicado sobre esos candidatos.
 
 ### Observabilidad de latencias
 
