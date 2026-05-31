@@ -9,6 +9,8 @@ Implementar los repositorios contra **PostgreSQL + pgvector**:
 - `PgVectorKnowledgeRepository` — `VectorKnowledgeRepository`: insertar chunks con embedding,
   búsqueda top-K por similitud (índice **HNSW**).
 - `PgChatMemoryRepository` — `ChatMemoryRepository`: sesiones, mensajes, ventana de últimos N.
+- `PgAnswerCacheRepository`, `PgEmbeddingCacheRepository`, `PgScrapedPageRepository` — caches
+  y frescura como repositorios separados, con una fachada `PgCacheRepository` solo por compatibilidad.
 - Esquema/migraciones de la DB (tablas + extensión `vector` + índice HNSW).
 
 ## Modelo de datos

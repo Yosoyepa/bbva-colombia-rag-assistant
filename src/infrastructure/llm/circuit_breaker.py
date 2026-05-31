@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
+from threading import RLock
 
 import structlog
 
@@ -42,6 +43,7 @@ class CircuitBreakerLLM(LargeLanguageModel):
         self._max_retries = max_retries
         self._failures = 0
         self._opened_at: float | None = None
+        self._lock = RLock()
 
     @property
     def name(self) -> str:
@@ -49,29 +51,35 @@ class CircuitBreakerLLM(LargeLanguageModel):
 
     def _allow(self) -> bool:
         """¿Se permite intentar la llamada? (gestiona el paso OPEN→HALF_OPEN)."""
-        if self._opened_at is None:
-            return True
-        if time.monotonic() - self._opened_at >= self._reset_timeout:
-            log.info("circuit_half_open", provider=self._name)
-            return True  # half-open: dejamos pasar una prueba
-        return False
+        with self._lock:
+            if self._opened_at is None:
+                return True
+            if time.monotonic() - self._opened_at >= self._reset_timeout:
+                log.info("circuit_half_open", provider=self._name)
+                return True  # half-open: dejamos pasar una prueba
+            return False
 
     def _on_success(self) -> None:
-        if self._failures or self._opened_at is not None:
-            log.info("circuit_closed", provider=self._name)
-        self._failures = 0
-        self._opened_at = None
+        with self._lock:
+            if self._failures or self._opened_at is not None:
+                log.info("circuit_closed", provider=self._name)
+            self._failures = 0
+            self._opened_at = None
 
     def _on_failure(self, error: Exception) -> None:
-        self._failures += 1
+        with self._lock:
+            self._failures += 1
+            failures = self._failures
+            should_open = failures >= self._failure_threshold
+            if should_open:
+                self._opened_at = time.monotonic()
         log.warning(
             "provider_call_failed",
             provider=self._name,
-            failures=self._failures,
+            failures=failures,
             error=str(error),
         )
-        if self._failures >= self._failure_threshold:
-            self._opened_at = time.monotonic()
+        if should_open:
             log.error("circuit_opened", provider=self._name, reset_in_s=self._reset_timeout)
 
     def _guarded(self, fn):

@@ -9,6 +9,7 @@ agregado. Es transparente para el caso de uso: sigue siendo un LargeLanguageMode
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextvars import ContextVar
 
 import structlog
 
@@ -27,20 +28,24 @@ class FallbackChainLLM(LargeLanguageModel):
         if not providers:
             raise ValueError("FallbackChainLLM requiere al menos un proveedor")
         self._providers = providers
-        self.last_provider: str | None = None
+        self._last_provider: ContextVar[str | None] = ContextVar("last_provider", default=None)
+
+    @property
+    def last_provider(self) -> str | None:
+        return self._last_provider.get()
 
     @staticmethod
     def _label(provider: LargeLanguageModel, idx: int) -> str:
         return getattr(provider, "name", provider.__class__.__name__) or f"#{idx}"
 
     def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
-        self.last_provider = None
+        self._last_provider.set(None)
         errors: list[str] = []
         for idx, provider in enumerate(self._providers):
             label = self._label(provider, idx)
             try:
                 content = provider.generate(system_prompt, messages)
-                self.last_provider = label
+                self._last_provider.set(label)
                 if idx > 0:
                     log.info("fallback_succeeded", provider=label, position=idx)
                 return content
@@ -50,7 +55,7 @@ class FallbackChainLLM(LargeLanguageModel):
         raise AllProvidersFailedError("todos los proveedores fallaron → " + " | ".join(errors))
 
     def stream(self, system_prompt: str, messages: list[ChatMessage]) -> Iterator[str]:
-        self.last_provider = None
+        self._last_provider.set(None)
         errors: list[str] = []
         for idx, provider in enumerate(self._providers):
             label = self._label(provider, idx)
@@ -58,7 +63,7 @@ class FallbackChainLLM(LargeLanguageModel):
                 # Materializamos el primer token para detectar fallo antes de ceder el stream.
                 gen = provider.stream(system_prompt, messages)
                 first = next(gen)
-                self.last_provider = label
+                self._last_provider.set(label)
                 if idx > 0:
                     log.info("fallback_succeeded", provider=label, position=idx)
                 yield first

@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from src.domain.entities import ChatMessage
@@ -22,11 +24,36 @@ class WorkingLLM:
         yield "ok"
 
 
+class PromptSensitiveLLM:
+    def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
+        if system_prompt == "fallback":
+            raise RuntimeError("boom")
+        return "primary"
+
+    def stream(self, system_prompt: str, messages: list[ChatMessage]):
+        yield self.generate(system_prompt, messages)
+
+
 def test_fallback_chain_recovers_from_failed_provider():
     chain = FallbackChainLLM([FailingLLM(), WorkingLLM()])
 
     assert chain.generate("system", []) == "ok"
     assert chain.last_provider == "WorkingLLM"
+
+
+def test_fallback_chain_tracks_provider_per_thread_context():
+    chain = FallbackChainLLM([PromptSensitiveLLM(), WorkingLLM()])
+
+    def call(prompt: str) -> tuple[str, str | None]:
+        content = chain.generate(prompt, [])
+        return content, chain.last_provider
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        primary = pool.submit(call, "primary")
+        fallback = pool.submit(call, "fallback")
+
+    assert primary.result() == ("primary", "PromptSensitiveLLM")
+    assert fallback.result() == ("ok", "WorkingLLM")
 
 
 def test_circuit_breaker_opens_after_threshold():

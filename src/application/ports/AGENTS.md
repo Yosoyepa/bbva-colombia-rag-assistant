@@ -12,6 +12,8 @@ implementa (Adapters). Ports previstos:
 - `LargeLanguageModel` — generar una respuesta dado prompt/mensajes (interfaz uniforme a todos los proveedores).
 - `Embedder` — convertir texto(s) en vector(es).
 - `RetrievalStrategy` — recuperar contexto para una query (Dense / Rerank).
+- `AnswerCacheRepository`, `EmbeddingCacheRepository`, `ScrapedPageRepository` — caches y
+  frescura separados para no mezclar responsabilidades en un único contrato.
 
 ## Regla de dependencia
 
