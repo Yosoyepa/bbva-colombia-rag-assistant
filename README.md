@@ -217,6 +217,11 @@ Estrategia V&V completa:
   evaluacion.
 - No se incluyen autenticacion, autorizacion ni scheduler externo; son extensiones naturales
   para un entorno corporativo.
+- Capacidades enterprise como gobernanza formal de prompts, monitoreo Prometheus/OpenTelemetry,
+  metricas de costo por token, A/B testing, data lineage, model registry y controles profundos
+  de privacidad/PII se evaluaron como evolucion, pero quedan fuera del MVP para mantener la
+  entrega ejecutable y alineada con el alcance de la prueba. Ver fundamento en
+  [docs/design-decisions.md](docs/design-decisions.md#alcance-enterprise-evaluado-y-no-incluido).
 
 ## Documentacion extendida
 

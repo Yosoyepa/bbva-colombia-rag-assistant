@@ -50,6 +50,25 @@
 | requests + BeautifulSoup / Scrapy | Menor resiliencia frente a un sitio bancario moderno. |
 | Embeddings por API | Mayor costo y dependencia externa; embeddings locales son suficientes para esta prueba. |
 
+## Alcance enterprise evaluado y no incluido
+
+Estas capacidades son relevantes para una plataforma corporativa de GenAI/LLMOps, pero no
+se implementaron en el MVP porque la prueba solicitaba un sistema RAG ejecutable en pocos
+dias, con Docker, scraping, memoria, analitica y patrones de diseno. Se documentan porque
+fueron consideradas durante el diseno y marcan una ruta razonable de evolucion.
+
+| Capacidad | Decision y fundamento |
+|---|---|
+| Autenticacion, autorizacion y controles de acceso | No se incluyeron porque la prueba evalua ejecucion local y no define usuarios, roles ni integracion corporativa. La frontera REST queda lista para agregar OAuth2/OIDC, JWT, RBAC y politicas por endpoint en una version enterprise. |
+| Gobernanza formal de prompts | El prompt vive en `PromptBuilder`, con reglas defensivas y versionable por Git. No se agrego registry ni historial de cambios en DB porque el MVP usa un prompt controlado. En produccion convendria un prompt registry con version, aprobador, fecha, metricas y rollback. |
+| Monitoreo productivo Prometheus/OpenTelemetry | La version actual expone observabilidad embebida por respuesta y logs estructurados, suficiente para demo y diagnostico local. En operacion continua se agregarian trazas OpenTelemetry, metricas Prometheus, dashboards Grafana y alertas por latencia/error/provider. |
+| Dataset Ragas amplio y umbrales estrictos | Ragas queda opt-in y el dataset es intencionalmente pequeno para no bloquear ejecucion local ni exigir credenciales. Para robustez real se requiere un dataset curado por negocio, 50-100+ preguntas, gold answers, umbrales en CI y revision periodica. |
+| Metricas de costo por inferencia/token | No se normalizaron porque cada proveedor reporta usage/costos de forma diferente y algunos caminos locales no tienen costo por token. La evolucion seria capturar tokens por adapter, asociar tabla de precios por modelo y persistir costo estimado por request. |
+| A/B testing real | No hay trafico multiusuario ni hipotesis de producto que justifique experimentacion. Una version productiva podria enrutar sesiones entre variantes de prompt/retrieval/modelo, persistir cohortes y medir calidad, latencia, costo y feedback. |
+| Pipeline batch/streaming productivo | La ingesta es CLI manual con frescura y deteccion de cambios, suficiente para la prueba. En produccion se moveria a scheduler/orquestador, jobs batch, colas o streaming segun frecuencia de cambio y criticidad del corpus. |
+| Data lineage formal y model registry | No se entrenan modelos propios; se usan modelos externos/locales configurados por entorno. Para gobierno ML se agregarian MLflow/model registry, model cards, version de embeddings, version de corpus, lineage de documentos y trazabilidad de datasets. |
+| Privacidad/PII profunda | El corpus base es informacion publica de BBVA Colombia y no se procesa informacion bancaria privada. Aun asi, un entorno corporativo deberia agregar redaccion/deteccion de PII en preguntas, retencion configurable, cifrado, auditoria, DLP y politicas de no almacenamiento para datos sensibles. |
+
 ## Patrones no incluidos
 
 Prototype, Flyweight, Bridge, Composite, Interpreter, Visitor, Memento, Mediator, State,

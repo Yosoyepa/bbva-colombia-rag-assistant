@@ -7,6 +7,12 @@ and this project follows semantic versioning for delivery milestones.
 
 ## [Unreleased]
 
+### Changed
+
+- README and design decisions now document enterprise-scope exclusions with rationale:
+  auth/authz, prompt governance, production monitoring, cost metrics, A/B testing, lineage,
+  model registry and privacy/PII controls.
+
 ## [1.4.0] - 2026-05-31
 
 ### Added
