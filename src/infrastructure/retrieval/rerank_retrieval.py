@@ -1,8 +1,8 @@
 """RerankRetrieval (Strategy) con Cross-Encoder en CPU.
 
-Recupera más candidatos por similitud densa y luego reordena con un Cross-Encoder.
-El modelo se carga de forma perezosa para no penalizar arranques donde
-`RERANK_ENABLED=false`.
+Recupera más candidatos desde una estrategia base y luego reordena con un
+Cross-Encoder. Si no se inyecta estrategia base, usa el camino denso histórico
+para mantener compatibilidad.
 """
 
 from __future__ import annotations
@@ -19,12 +19,14 @@ class RerankRetrieval(RetrievalStrategy):
         model_name: str,
         candidate_multiplier: int = 4,
         cross_encoder=None,
+        base_retrieval: RetrievalStrategy | None = None,
     ) -> None:
         self._embedder = embedder
         self._repository = repository
         self._model_name = model_name
         self._candidate_multiplier = max(candidate_multiplier, 1)
         self._cross_encoder = cross_encoder
+        self._base_retrieval = base_retrieval
 
     @property
     def cross_encoder(self):
@@ -36,8 +38,11 @@ class RerankRetrieval(RetrievalStrategy):
 
     def retrieve(self, query: str, top_k: int) -> list[Chunk]:
         candidate_k = max(top_k * self._candidate_multiplier, top_k)
-        query_embedding = self._embedder.embed_text(query)
-        candidates = self._repository.search(query_embedding, candidate_k)
+        if self._base_retrieval is None:
+            query_embedding = self._embedder.embed_text(query)
+            candidates = self._repository.search(query_embedding, candidate_k)
+        else:
+            candidates = self._base_retrieval.retrieve(query, candidate_k)
         if not candidates:
             return []
 
