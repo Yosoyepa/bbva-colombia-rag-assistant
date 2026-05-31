@@ -1,4 +1,5 @@
 """Port: estrategia de recuperación de contexto (patrón Strategy)."""
+
 from abc import ABC, abstractmethod
 
 from src.domain.entities import Chunk

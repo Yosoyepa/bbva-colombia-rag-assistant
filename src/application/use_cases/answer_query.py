@@ -1,4 +1,5 @@
 """CU-02: responder una query con RAG anclado a fuentes (+ memoria CU-03)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -31,6 +32,7 @@ class AnswerObservability:
 @dataclass
 class Answer:
     """Respuesta anclada: texto + fuentes + trazabilidad."""
+
     session_id: UUID
     content: str
     sources: list[str] = field(default_factory=list)

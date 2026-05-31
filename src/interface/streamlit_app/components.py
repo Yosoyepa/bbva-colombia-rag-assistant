@@ -1,4 +1,5 @@
 """Streamlit visual components."""
+
 from __future__ import annotations
 
 import streamlit as st
@@ -18,9 +19,7 @@ def render_sidebar(client: ApiClient) -> None:
         st.subheader("Estado")
         try:
             health = client.health()
-            st.success(
-                f"API ok · DB={health['db']} · proveedor={health['provider']}"
-            )
+            st.success(f"API ok · DB={health['db']} · proveedor={health['provider']}")
         except Exception as exc:  # noqa: BLE001
             st.error(f"API no disponible: {exc}")
 
@@ -148,13 +147,31 @@ def _render_observability(observability: dict | None) -> None:
     if not observability:
         return
     with st.expander("Observabilidad", expanded=False):
-        cols = st.columns(4)
-        cols[0].metric("Total", f"{observability.get('total_latency_ms', 0):.1f} ms")
-        cols[1].metric("Retrieval", f"{observability.get('retrieval_latency_ms', 0):.1f} ms")
-        cols[2].metric("LLM", f"{observability.get('llm_latency_ms', 0):.1f} ms")
-        cols[3].metric(
-            "Persistencia",
-            f"{observability.get('persistence_latency_ms', 0):.1f} ms",
+        st.dataframe(
+            [
+                {
+                    "etapa": "Total",
+                    "latencia_ms": _round_or_none(observability.get("total_latency_ms")),
+                },
+                {
+                    "etapa": "Retrieval",
+                    "latencia_ms": _round_or_none(observability.get("retrieval_latency_ms")),
+                },
+                {
+                    "etapa": "Prompt",
+                    "latencia_ms": _round_or_none(observability.get("prompt_latency_ms")),
+                },
+                {
+                    "etapa": "LLM",
+                    "latencia_ms": _round_or_none(observability.get("llm_latency_ms")),
+                },
+                {
+                    "etapa": "Persistencia",
+                    "latencia_ms": _round_or_none(observability.get("persistence_latency_ms")),
+                },
+            ],
+            width="stretch",
+            hide_index=True,
         )
         st.caption(
             f"Proveedor: {observability.get('provider') or 'n/a'} · "

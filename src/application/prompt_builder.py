@@ -4,6 +4,7 @@ Lógica pura (sin deps externas): toma el contexto recuperado y produce un syste
 prompt **defensivo** que ancla la respuesta a las fuentes y prohíbe alucinar
 (regla de negocio de CU-02). El historial de N mensajes va aparte, como mensajes.
 """
+
 from __future__ import annotations
 
 from src.domain.entities import Chunk

@@ -7,6 +7,7 @@ de responsabilidad**: coloca primero el proveedor activo, luego el resto de
 (Decorator) y los compone en un `FallbackChainLLM`. Los proveedores sin credenciales
 se omiten (se loguea) en vez de tumbar el arranque.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -88,7 +89,9 @@ class LLMFactory:
                 continue
             chain.append(
                 CircuitBreakerLLM(
-                    raw, name=name, failure_threshold=failure_threshold,
+                    raw,
+                    name=name,
+                    failure_threshold=failure_threshold,
                     reset_timeout=reset_timeout,
                 )
             )

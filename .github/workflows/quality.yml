@@ -2,9 +2,9 @@ name: quality
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
     inputs:
       run_ragas:
@@ -13,6 +13,24 @@ on:
         default: "false"
 
 jobs:
+  static-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and dev tools
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[test,dev]"
+      - name: Compile Python modules
+        run: python -m compileall src tests
+      - name: Check formatting with Black
+        run: black --check src tests
+      - name: Check import order with isort
+        run: isort --check-only src tests
+      - name: Lint with flake8
+        run: flake8 src tests
+
   verification:
     runs-on: ubuntu-latest
     steps:

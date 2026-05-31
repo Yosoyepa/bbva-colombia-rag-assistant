@@ -4,6 +4,7 @@ Habla con un servidor Ollama por HTTP (`/api/chat`). El system prompt va como
 primer mensaje con rol `system`. Útil offline / sin claves de API. Import de
 httpx diferido al uso.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -27,10 +28,7 @@ class OllamaClient(LargeLanguageModel):
     def _payload(self, system_prompt: str, messages: list[ChatMessage]) -> dict:
         role_map = {"user": "user", "assistant": "assistant", "system": "system"}
         msgs = [{"role": "system", "content": system_prompt}]
-        msgs += [
-            {"role": role_map.get(m.role, "user"), "content": m.content}
-            for m in messages
-        ]
+        msgs += [{"role": role_map.get(m.role, "user"), "content": m.content} for m in messages]
         return {"model": self._model, "messages": msgs}
 
     def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
