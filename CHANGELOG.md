@@ -15,6 +15,8 @@ and this project follows semantic versioning for delivery milestones.
 
 ### Changed
 
+- README streamlined for technical-evaluation review, with detailed architecture, decisions,
+  ingestion, retrieval, observability, API and testing content moved to `docs/`.
 - Reranker composition can now wrap dense or hybrid retrieval, preserving BM25/dense/hybrid
   trace fields while adding `rerank_score`.
 - Split cache/freshness persistence into narrower repositories and ports for answers,
