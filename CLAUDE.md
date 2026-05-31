@@ -61,7 +61,7 @@ Se implementan los que resuelven un problema real y se **documentan los descarta
 | **Decorator** | `infrastructure/llm/` | envolver el LLM con retry/logging/**Circuit Breaker** |
 | **Chain of Responsibility** | `infrastructure/llm/` | cadena de fallback entre proveedores |
 
-**Descartados (documentar en README):** Prototype, Flyweight, Bridge, Composite, Interpreter,
+**Descartados (documentar en README/docs):** Prototype, Flyweight, Bridge, Composite, Interpreter,
 Visitor, Memento, Mediator, State, Command, Template, Proxy, Iterator, Object Pool.
 **Patrones arquitectónicos aplicados:** Store-and-Forward (crudo+limpio en disco), DTO,
 Circuit Breaker, Log Aggregation (logging estructurado → analítica CU-04).
@@ -113,6 +113,7 @@ el "cómo se adapta cada capa" vive ahí.
 - [`specs/AGENTS.md`](specs/AGENTS.md) — specs por caso de uso (criterios de aceptación).
 - [`tests/AGENTS.md`](tests/AGENTS.md) — niveles L1 (unit) y L2 (Ragas).
 - [`data/AGENTS.md`](data/AGENTS.md) — Store-and-Forward: crudo y limpio en disco.
+- [`docs/AGENTS.md`](docs/AGENTS.md) — documentación extendida y decisiones de entrega.
 
 ## 9. Comandos frecuentes
 
