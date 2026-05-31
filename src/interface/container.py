@@ -7,6 +7,9 @@ arrancar la API y /health aunque aún no haya GOOGLE_API_KEY configurada).
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from threading import RLock
+
 import structlog
 
 from src.application.use_cases import AnalyticsUseCase, AnswerQueryUseCase, IngestDataUseCase
@@ -25,52 +28,67 @@ class Container:
         self._embedder = None
         self._knowledge_repo = None
         self._memory_repo = None
-        self._cache_repo = None
+        self._embedding_cache_repo = None
+        self._answer_cache_repo = None
         self._retrieval = None
         self._llm = None
+        self._lock = RLock()
 
     @property
     def embedder(self):
-        if self._embedder is None:
+        def factory():
             from src.infrastructure.embeddings import CachedEmbedder, SentenceTransformerEmbedder
 
             embedder = SentenceTransformerEmbedder(self.settings.embedding_model)
             if self.settings.embedding_cache_enabled:
                 embedder = CachedEmbedder(
                     embedder,
-                    self.cache_repo,
+                    self.embedding_cache_repo,
                     model_name=self.settings.embedding_model,
                 )
-            self._embedder = embedder
-        return self._embedder
+            return embedder
+
+        return self._singleton("_embedder", factory)
 
     @property
     def knowledge_repo(self):
-        if self._knowledge_repo is None:
+        def factory():
             from src.infrastructure.persistence import PgVectorKnowledgeRepository
 
-            self._knowledge_repo = PgVectorKnowledgeRepository(self.pool)
-        return self._knowledge_repo
+            return PgVectorKnowledgeRepository(self.pool)
+
+        return self._singleton("_knowledge_repo", factory)
 
     @property
     def memory_repo(self):
-        if self._memory_repo is None:
+        def factory():
             from src.infrastructure.persistence import PgChatMemoryRepository
 
-            self._memory_repo = PgChatMemoryRepository(self.pool)
-        return self._memory_repo
+            return PgChatMemoryRepository(self.pool)
+
+        return self._singleton("_memory_repo", factory)
 
     @property
-    def cache_repo(self):
-        if self._cache_repo is None:
-            from src.infrastructure.persistence import PgCacheRepository
+    def embedding_cache_repo(self):
+        def factory():
+            from src.infrastructure.persistence import PgEmbeddingCacheRepository
 
-            self._cache_repo = PgCacheRepository(self.pool)
-        return self._cache_repo
+            return PgEmbeddingCacheRepository(self.pool)
+
+        return self._singleton("_embedding_cache_repo", factory)
+
+    @property
+    def answer_cache_repo(self):
+        def factory():
+            from src.infrastructure.persistence import PgAnswerCacheRepository
+
+            return PgAnswerCacheRepository(self.pool)
+
+        return self._singleton("_answer_cache_repo", factory)
 
     @property
     def retrieval(self):
-        if self._retrieval is None:
+        def factory():
             from src.infrastructure.retrieval import (
                 DenseRetrieval,
                 HybridRetrieval,
@@ -78,31 +96,33 @@ class Container:
             )
 
             if self.settings.rerank_enabled:
-                self._retrieval = RerankRetrieval(
+                return RerankRetrieval(
                     self.embedder,
                     self.knowledge_repo,
                     model_name=self.settings.rerank_model,
                 )
             elif self.settings.retrieval_mode.lower() == "hybrid":
-                self._retrieval = HybridRetrieval(
+                return HybridRetrieval(
                     self.embedder,
                     self.knowledge_repo,
                     dense_weight=self.settings.hybrid_dense_weight,
                     bm25_weight=self.settings.hybrid_bm25_weight,
                 )
             else:
-                self._retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
-        return self._retrieval
+                return DenseRetrieval(self.embedder, self.knowledge_repo)
+
+        return self._singleton("_retrieval", factory)
 
     @property
     def llm(self):
         """LLM construido bajo demanda: cadena de fallback (activo + respaldos) con
         Circuit Breaker por proveedor. Falla claro si ninguno tiene credenciales."""
-        if self._llm is None:
+
+        def factory():
             from src.infrastructure.llm import LLMFactory
 
             s = self.settings
-            self._llm = LLMFactory.create_with_fallback(
+            return LLMFactory.create_with_fallback(
                 active_provider=s.model_provider,
                 fallback_order=s.fallback_order,
                 model=s.llm_model,
@@ -117,7 +137,8 @@ class Container:
                 bedrock_model_id=s.bedrock_model_id,
                 ollama_host=s.ollama_host,
             )
-        return self._llm
+
+        return self._singleton("_llm", factory)
 
     def answer_use_case(self) -> AnswerQueryUseCase:
         return AnswerQueryUseCase(
@@ -126,7 +147,7 @@ class Container:
             memory=self.memory_repo,
             top_k=self.settings.top_k,
             n_history_messages=self.settings.n_history_messages,
-            answer_cache=self.cache_repo,
+            answer_cache=self.answer_cache_repo,
             answer_cache_enabled=self.settings.answer_cache_enabled,
             answer_cache_ttl_seconds=self.settings.answer_cache_ttl_seconds,
             cache_namespace=(
@@ -156,3 +177,14 @@ class Container:
 
     def close(self) -> None:
         self.pool.close()
+
+    def _singleton(self, attr: str, factory: Callable[[], object]):
+        instance = getattr(self, attr)
+        if instance is not None:
+            return instance
+        with self._lock:
+            instance = getattr(self, attr)
+            if instance is None:
+                instance = factory()
+                setattr(self, attr, instance)
+            return instance

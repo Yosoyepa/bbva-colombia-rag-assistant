@@ -11,46 +11,52 @@ from datetime import datetime, timedelta
 
 from psycopg_pool import ConnectionPool
 
-from src.application.ports import AnswerCacheRepository, CachedAnswer
+from src.application.ports import (
+    AnswerCacheRepository,
+    CachedAnswer,
+    EmbeddingCacheRepository,
+    ScrapedPageRepository,
+)
 from src.domain.entities import Chunk
 
 
-class PgCacheRepository(AnswerCacheRepository):
+def _ensure_cache_schema(pool: ConnectionPool) -> None:
+    """Crear tablas auxiliares cuando la DB ya existía antes de v1.3.0."""
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS embedding_cache (
+                cache_key        TEXT PRIMARY KEY,
+                model_name       TEXT NOT NULL,
+                text_hash        TEXT NOT NULL,
+                vector_embedding VECTOR(384) NOT NULL,
+                created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS answer_cache (
+                cache_key       TEXT PRIMARY KEY,
+                content         TEXT NOT NULL,
+                sources         TEXT[] NOT NULL DEFAULT '{}',
+                retrieval_trace JSONB NOT NULL DEFAULT '[]'::jsonb,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS scraped_pages (
+                source_url   TEXT PRIMARY KEY,
+                content_hash TEXT NOT NULL,
+                fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                changed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                status       VARCHAR(24) NOT NULL DEFAULT 'new'
+            )
+            """)
+
+
+class PgEmbeddingCacheRepository(EmbeddingCacheRepository):
     def __init__(self, pool: ConnectionPool) -> None:
         self._pool = pool
-        self._ensure_schema()
-
-    def _ensure_schema(self) -> None:
-        """Crear tablas auxiliares cuando la DB ya existía antes de v1.3.0."""
-        with self._pool.connection() as conn, conn.cursor() as cur:
-            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS embedding_cache (
-                    cache_key        TEXT PRIMARY KEY,
-                    model_name       TEXT NOT NULL,
-                    text_hash        TEXT NOT NULL,
-                    vector_embedding VECTOR(384) NOT NULL,
-                    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS answer_cache (
-                    cache_key       TEXT PRIMARY KEY,
-                    content         TEXT NOT NULL,
-                    sources         TEXT[] NOT NULL DEFAULT '{}',
-                    retrieval_trace JSONB NOT NULL DEFAULT '[]'::jsonb,
-                    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS scraped_pages (
-                    source_url   TEXT PRIMARY KEY,
-                    content_hash TEXT NOT NULL,
-                    fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    changed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    status       VARCHAR(24) NOT NULL DEFAULT 'new'
-                )
-                """)
+        _ensure_cache_schema(pool)
 
     def get_embedding(self, cache_key: str) -> list[float] | None:
         with self._pool.connection() as conn, conn.cursor() as cur:
@@ -84,6 +90,12 @@ class PgCacheRepository(AnswerCacheRepository):
                 """,
                 (cache_key, model_name, text_hash, vector_literal),
             )
+
+
+class PgAnswerCacheRepository(AnswerCacheRepository):
+    def __init__(self, pool: ConnectionPool) -> None:
+        self._pool = pool
+        _ensure_cache_schema(pool)
 
     def get_answer(self, cache_key: str, ttl_seconds: int) -> CachedAnswer | None:
         with self._pool.connection() as conn, conn.cursor() as cur:
@@ -147,6 +159,12 @@ class PgCacheRepository(AnswerCacheRepository):
                 (cache_key, answer.content, answer.sources, json.dumps(trace)),
             )
 
+
+class PgScrapedPageRepository(ScrapedPageRepository):
+    def __init__(self, pool: ConnectionPool) -> None:
+        self._pool = pool
+        _ensure_cache_schema(pool)
+
     def should_process_page(
         self,
         source_url: str,
@@ -195,3 +213,11 @@ class PgCacheRepository(AnswerCacheRepository):
                 (source_url, content_hash, status, force_refresh),
             )
         return process
+
+
+class PgCacheRepository(
+    PgEmbeddingCacheRepository,
+    PgAnswerCacheRepository,
+    PgScrapedPageRepository,
+):
+    """Compatibilidad con versiones previas; preferir los repositorios específicos."""
