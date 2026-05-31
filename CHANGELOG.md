@@ -7,6 +7,8 @@ and this project follows semantic versioning for delivery milestones.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-31
+
 ### Added
 
 - Bounded deeper scraping configuration: start URLs, max depth, allowed prefixes and exclude
@@ -24,6 +26,8 @@ and this project follows semantic versioning for delivery milestones.
 - Made LLM fallback provider observability context-local and guarded Circuit Breaker state.
 - README now explains how to increase scraping coverage without compromising runtime and
   reliability.
+- FastAPI application metadata version updated to `1.4.0`.
+- Python package version updated to `1.4.0`.
 
 ## [1.3.0] - 2026-05-30
 
