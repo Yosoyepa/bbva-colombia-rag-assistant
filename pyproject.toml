@@ -48,6 +48,9 @@ test = [
     "deepeval>=1.4",
 ]
 dev = [
+    "black>=24.0",
+    "flake8>=7.0",
+    "isort>=5.13",
     "ruff>=0.6",
     "mypy>=1.11",
 ]
@@ -66,6 +69,16 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["src"]
+skip = [".venv", "data"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
