@@ -7,6 +7,20 @@ and this project follows semantic versioning for delivery milestones.
 
 ## [Unreleased]
 
+### Added
+
+- Bounded deeper scraping configuration: start URLs, max depth, allowed prefixes and exclude
+  patterns for `bbva-ingest`.
+- Unit coverage for scraper URL filtering/prioritization and per-thread LLM provider tracking.
+
+### Changed
+
+- Split cache/freshness persistence into narrower repositories and ports for answers,
+  embeddings and scraped pages.
+- Made LLM fallback provider observability context-local and guarded Circuit Breaker state.
+- README now explains how to increase scraping coverage without compromising runtime and
+  reliability.
+
 ## [1.3.0] - 2026-05-30
 
 ### Added
