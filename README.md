@@ -241,3 +241,5 @@ Hitos:
 - `v1.1.0`: dashboard visual de analitica.
 - `v1.2.0`: trazabilidad de retrieval y Streamlit modular.
 - `v1.3.0`: V&V, observabilidad, cache, retrieval hibrido y frescura de ingesta.
+- `v1.4.0`: entrega final con scraping profundo acotado, refinamientos SOLID, rerank sobre
+  retrieval hibrido y README ejecutivo con documentacion extendida.
