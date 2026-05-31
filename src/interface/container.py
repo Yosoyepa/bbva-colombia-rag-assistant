@@ -95,21 +95,24 @@ class Container:
                 RerankRetrieval,
             )
 
-            if self.settings.rerank_enabled:
-                return RerankRetrieval(
-                    self.embedder,
-                    self.knowledge_repo,
-                    model_name=self.settings.rerank_model,
-                )
-            elif self.settings.retrieval_mode.lower() == "hybrid":
-                return HybridRetrieval(
+            if self.settings.retrieval_mode.lower() == "hybrid":
+                base_retrieval = HybridRetrieval(
                     self.embedder,
                     self.knowledge_repo,
                     dense_weight=self.settings.hybrid_dense_weight,
                     bm25_weight=self.settings.hybrid_bm25_weight,
                 )
             else:
-                return DenseRetrieval(self.embedder, self.knowledge_repo)
+                base_retrieval = DenseRetrieval(self.embedder, self.knowledge_repo)
+
+            if self.settings.rerank_enabled:
+                return RerankRetrieval(
+                    self.embedder,
+                    self.knowledge_repo,
+                    model_name=self.settings.rerank_model,
+                    base_retrieval=base_retrieval,
+                )
+            return base_retrieval
 
         return self._singleton("_retrieval", factory)
 
