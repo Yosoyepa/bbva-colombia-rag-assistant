@@ -1,4 +1,5 @@
 """HybridRetrieval (Strategy) — combina BM25 PostgreSQL + similitud densa."""
+
 from __future__ import annotations
 
 from src.application.ports import Embedder, RetrievalStrategy, VectorKnowledgeRepository

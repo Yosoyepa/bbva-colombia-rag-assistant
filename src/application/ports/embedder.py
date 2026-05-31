@@ -1,4 +1,5 @@
 """Port: vectorización de texto (embeddings)."""
+
 from abc import ABC, abstractmethod
 
 

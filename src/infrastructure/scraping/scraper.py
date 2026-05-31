@@ -4,6 +4,7 @@ Navega secciones públicas sorteando Cloudflare/WAF (uc=True) y guarda el HTML
 **crudo** en disco. No limpia ni chunkea: ese es trabajo del cleaner/chunker.
 Reglas de la capa en `AGENTS.md` de esta carpeta.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -98,9 +99,12 @@ class SeleniumBaseScraper:
         """Enlaces internos (mismo dominio) que parezcan páginas de contenido."""
         links: list[str] = []
         try:
-            hrefs = sb.execute_script(
-                "return Array.from(document.querySelectorAll('a[href]')).map(a => a.href);"
-            ) or []
+            hrefs = (
+                sb.execute_script(
+                    "return Array.from(document.querySelectorAll('a[href]')).map(a => a.href);"
+                )
+                or []
+            )
         except Exception as exc:  # noqa: BLE001
             log.warning("extract_links_failed", url=current_url, error=str(exc))
             return links

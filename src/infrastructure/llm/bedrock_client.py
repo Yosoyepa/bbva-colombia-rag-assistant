@@ -3,6 +3,7 @@
 Usa la Messages API de Anthropic sobre Bedrock (`invoke_model`). Credenciales
 AWS por env. Import de boto3 diferido al uso.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,10 +41,7 @@ class BedrockClient(LargeLanguageModel):
 
     def _body(self, system_prompt: str, messages: list[ChatMessage]) -> str:
         role_map = {"user": "user", "assistant": "assistant", "system": "user"}
-        msgs = [
-            {"role": role_map.get(m.role, "user"), "content": m.content}
-            for m in messages
-        ]
+        msgs = [{"role": role_map.get(m.role, "user"), "content": m.content} for m in messages]
         return json.dumps(
             {
                 "anthropic_version": "bedrock-2023-05-31",

@@ -1,4 +1,5 @@
 """Decorator de cache para embeddings locales."""
+
 from __future__ import annotations
 
 import hashlib

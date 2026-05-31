@@ -2,6 +2,7 @@
 
 Sesiones por ID, mensajes persistidos y ventana de últimos N (N por env).
 """
+
 from __future__ import annotations
 
 from uuid import UUID

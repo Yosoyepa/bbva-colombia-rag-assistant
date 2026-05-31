@@ -3,6 +3,7 @@
 Recorre el histórico real de conversaciones para extraer métricas de impacto
 (sesiones, mensajes, fuentes más citadas). Ver SPEC-CU04.
 """
+
 from __future__ import annotations
 
 import typer
@@ -24,10 +25,7 @@ def report(limit: int = typer.Option(10, help="Máximo de fuentes a mostrar.")) 
     typer.echo("Reporte de analítica BBVA RAG")
     typer.echo(f"Sesiones totales: {analytics_report.total_sessions}")
     typer.echo(f"Mensajes totales: {analytics_report.total_messages}")
-    typer.echo(
-        "Mensajes promedio por sesión: "
-        f"{analytics_report.avg_messages_per_session:.2f}"
-    )
+    typer.echo("Mensajes promedio por sesión: " f"{analytics_report.avg_messages_per_session:.2f}")
     typer.echo("Fuentes más citadas:")
     for source_url, citations in analytics_report.top_sources[:limit]:
         typer.echo(f"- {source_url}: {citations}")

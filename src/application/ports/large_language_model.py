@@ -1,4 +1,5 @@
 """Port: modelo de lenguaje (interfaz uniforme a todos los proveedores)."""
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 

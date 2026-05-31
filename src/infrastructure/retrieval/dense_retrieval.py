@@ -3,6 +3,7 @@
 Embebe la query con el mismo Embedder de la ingesta y busca top-K en pgvector.
 Camino base del MVP. RerankRetrieval (bonus) se añade en Fase 3 sin tocar el caso de uso.
 """
+
 from __future__ import annotations
 
 from src.application.ports import Embedder, RetrievalStrategy, VectorKnowledgeRepository

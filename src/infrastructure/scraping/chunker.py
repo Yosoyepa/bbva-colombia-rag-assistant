@@ -3,6 +3,7 @@
 Usa RecursiveCharacterTextSplitter (LangChain): respeta límites naturales
 (párrafos, frases) con solape configurable. CHUNK_SIZE/CHUNK_OVERLAP por env.
 """
+
 from __future__ import annotations
 
 import structlog

@@ -3,6 +3,7 @@
 Agrupa almacenamiento auxiliar del pipeline: embeddings, respuestas y páginas
 scrapeadas. El SQL permanece en infraestructura.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,7 @@ class PgCacheRepository(AnswerCacheRepository):
         """Crear tablas auxiliares cuando la DB ya existía antes de v1.3.0."""
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS embedding_cache (
                     cache_key        TEXT PRIMARY KEY,
                     model_name       TEXT NOT NULL,
@@ -32,10 +32,8 @@ class PgCacheRepository(AnswerCacheRepository):
                     vector_embedding VECTOR(384) NOT NULL,
                     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
                 )
-                """
-            )
-            cur.execute(
-                """
+                """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS answer_cache (
                     cache_key       TEXT PRIMARY KEY,
                     content         TEXT NOT NULL,
@@ -43,10 +41,8 @@ class PgCacheRepository(AnswerCacheRepository):
                     retrieval_trace JSONB NOT NULL DEFAULT '[]'::jsonb,
                     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
                 )
-                """
-            )
-            cur.execute(
-                """
+                """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS scraped_pages (
                     source_url   TEXT PRIMARY KEY,
                     content_hash TEXT NOT NULL,
@@ -54,8 +50,7 @@ class PgCacheRepository(AnswerCacheRepository):
                     changed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
                     status       VARCHAR(24) NOT NULL DEFAULT 'new'
                 )
-                """
-            )
+                """)
 
     def get_embedding(self, cache_key: str) -> list[float] | None:
         with self._pool.connection() as conn, conn.cursor() as cur:

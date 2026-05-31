@@ -1,4 +1,5 @@
 """Port: persistencia y búsqueda vectorial del conocimiento (chunks)."""
+
 from abc import ABC, abstractmethod
 
 from src.domain.entities import Chunk

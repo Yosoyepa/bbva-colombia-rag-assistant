@@ -8,6 +8,7 @@ prueba; si va bien cierra, si falla vuelve a abrir. Suma retry + logging.
 
 Estados: CLOSED (normal) → OPEN (rechaza) → HALF_OPEN (prueba) → CLOSED/OPEN.
 """
+
 from __future__ import annotations
 
 import time

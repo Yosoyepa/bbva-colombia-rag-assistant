@@ -4,6 +4,7 @@ Mapea ChatMessage al formato Messages API (roles user/assistant) y pasa el
 contexto recuperado como `system`. Import diferido para no exigir el SDK salvo
 que este proveedor se use de verdad.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -29,10 +30,7 @@ class AnthropicClient(LargeLanguageModel):
     def _to_messages(self, messages: list[ChatMessage]) -> list[dict]:
         # Claude solo acepta user/assistant en `messages`; system va aparte.
         role_map = {"user": "user", "assistant": "assistant", "system": "user"}
-        return [
-            {"role": role_map.get(m.role, "user"), "content": m.content}
-            for m in messages
-        ]
+        return [{"role": role_map.get(m.role, "user"), "content": m.content} for m in messages]
 
     def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
         resp = self._client.messages.create(

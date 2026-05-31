@@ -1,4 +1,5 @@
 """Router de conversación RAG (CU-02/CU-03)."""
+
 from __future__ import annotations
 
 from typing import Annotated
