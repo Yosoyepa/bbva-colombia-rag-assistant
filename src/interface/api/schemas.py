@@ -3,6 +3,7 @@
 Son modelos Pydantic de entrada/salida: validan y serializan datos HTTP, sin
 reglas de negocio ni acceso a servicios.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

@@ -1,4 +1,5 @@
 """Port: cache persistente de respuestas conversacionales."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 

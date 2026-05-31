@@ -3,6 +3,7 @@
 El modelo se carga una sola vez (es caro) y se reutiliza. Mismo embedder para
 indexar (CU-01) y para la query (CU-02): mismo espacio vectorial.
 """
+
 from __future__ import annotations
 
 import structlog

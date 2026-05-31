@@ -4,6 +4,7 @@
 CPU) y el pool se crean una sola vez; el LLM se construye perezosamente (permite
 arrancar la API y /health aunque aún no haya GOOGLE_API_KEY configurada).
 """
+
 from __future__ import annotations
 
 import structlog
@@ -70,7 +71,11 @@ class Container:
     @property
     def retrieval(self):
         if self._retrieval is None:
-            from src.infrastructure.retrieval import DenseRetrieval, HybridRetrieval, RerankRetrieval
+            from src.infrastructure.retrieval import (
+                DenseRetrieval,
+                HybridRetrieval,
+                RerankRetrieval,
+            )
 
             if self.settings.rerank_enabled:
                 self._retrieval = RerankRetrieval(

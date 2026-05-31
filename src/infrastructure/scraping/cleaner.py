@@ -3,6 +3,7 @@
 trafilatura extrae el contenido relevante (descarta nav/footer/scripts) y se
 guarda el **texto limpio** en disco (Store-and-Forward: reprocesable sin re-scrapear).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

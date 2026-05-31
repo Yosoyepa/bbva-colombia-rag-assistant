@@ -3,6 +3,7 @@
 scrape (SeleniumBase UC) → clean (trafilatura) → chunk (LangChain) → embed → index.
 Composition Root para la ingesta: arma la infraestructura y ejecuta el caso de uso.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -27,9 +28,13 @@ def ingest(
     force_refresh: bool = typer.Option(False, help="Reprocesar páginas aunque estén frescas."),
 ) -> None:
     """Ejecuta el pipeline completo de ingesta y reporta conteos verificables."""
-    from src.infrastructure.persistence import PgCacheRepository, PgVectorKnowledgeRepository, create_pool
-    from src.infrastructure.scraping import SeleniumBaseScraper, TextChunker, TrafilaturaCleaner
     from src.application.use_cases import IngestDataUseCase, IngestResult
+    from src.infrastructure.persistence import (
+        PgCacheRepository,
+        PgVectorKnowledgeRepository,
+        create_pool,
+    )
+    from src.infrastructure.scraping import SeleniumBaseScraper, TextChunker, TrafilaturaCleaner
 
     s = get_settings()
     scraper = SeleniumBaseScraper(s.scrape_base_url, max_pages=max_pages, headless=headless)

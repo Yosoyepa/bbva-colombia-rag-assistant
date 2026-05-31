@@ -5,6 +5,7 @@ CircuitBreakerLLM). En `generate`/`stream` intenta el primero; si lanza, registr
 y delega en el siguiente eslabón de la cadena. Si todos fallan, eleva un error
 agregado. Es transparente para el caso de uso: sigue siendo un LargeLanguageModel.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator

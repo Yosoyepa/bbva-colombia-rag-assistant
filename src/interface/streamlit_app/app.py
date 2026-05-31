@@ -1,4 +1,5 @@
 """Streamlit entrypoint for the BBVA RAG assistant."""
+
 from __future__ import annotations
 
 import os
@@ -22,9 +23,7 @@ def main() -> None:
     init_state()
 
     st.title("💬 Asistente BBVA Colombia")
-    st.caption(
-        "RAG sobre información pública de bbva.com.co — respuestas ancladas a fuentes."
-    )
+    st.caption("RAG sobre información pública de bbva.com.co — respuestas ancladas a fuentes.")
 
     render_sidebar(client)
 

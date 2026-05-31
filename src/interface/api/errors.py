@@ -3,6 +3,7 @@
 La lógica de negocio no vive aquí; este módulo solo traduce fallos de aplicación,
 configuración o infraestructura a respuestas HTTP consistentes.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -16,9 +17,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Registra el mapeo centralizado de excepciones a códigos HTTP."""
 
     @app.exception_handler(NotImplementedError)
-    async def not_implemented_handler(
-        request: Request, exc: NotImplementedError
-    ) -> JSONResponse:
+    async def not_implemented_handler(request: Request, exc: NotImplementedError) -> JSONResponse:
         log.warning("api_not_implemented", path=request.url.path, error=str(exc))
         return JSONResponse(status_code=501, content={"detail": str(exc)})
 

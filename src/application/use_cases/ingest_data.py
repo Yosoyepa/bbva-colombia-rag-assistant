@@ -3,6 +3,7 @@
 Stub: la orquestación se completa en Fase 1. Define la forma del caso de uso y
 sus dependencias (ports), inyectadas por el Composition Root.
 """
+
 from dataclasses import dataclass
 
 from src.application.ports import Embedder, VectorKnowledgeRepository
@@ -12,6 +13,7 @@ from src.domain.entities import Chunk
 @dataclass
 class IngestResult:
     """Resumen verificable de una corrida de ingesta (alimenta CU-01 spec)."""
+
     documents_scraped: int
     chunks_indexed: int
 

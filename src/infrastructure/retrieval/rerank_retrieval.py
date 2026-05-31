@@ -4,6 +4,7 @@ Recupera más candidatos por similitud densa y luego reordena con un Cross-Encod
 El modelo se carga de forma perezosa para no penalizar arranques donde
 `RERANK_ENABLED=false`.
 """
+
 from __future__ import annotations
 
 from src.application.ports import Embedder, RetrievalStrategy, VectorKnowledgeRepository

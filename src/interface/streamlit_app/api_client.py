@@ -3,6 +3,7 @@
 The UI intentionally talks to FastAPI instead of importing the RAG engine. This keeps
 Streamlit as a replaceable interface adapter.
 """
+
 from __future__ import annotations
 
 from uuid import UUID

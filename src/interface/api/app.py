@@ -3,6 +3,7 @@
 Este módulo solo ensambla la frontera REST: lifespan, manejo global de errores
 y routers. Los DTOs, rutas y dependencias viven en módulos separados.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable

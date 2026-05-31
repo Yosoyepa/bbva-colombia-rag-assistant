@@ -1,4 +1,5 @@
 """Port: persistencia de sesiones y mensajes de chat (memoria conversacional)."""
+
 from abc import ABC, abstractmethod
 from uuid import UUID
 

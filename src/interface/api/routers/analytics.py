@@ -1,4 +1,5 @@
 """Router de analítica histórica (CU-04)."""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -23,7 +24,6 @@ def analytics(
         total_messages=report.total_messages,
         avg_messages_per_session=report.avg_messages_per_session,
         top_sources=[
-            SourceMetric(source_url=url, citations=count)
-            for url, count in report.top_sources
+            SourceMetric(source_url=url, citations=count) for url, count in report.top_sources
         ],
     )

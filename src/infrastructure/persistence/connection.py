@@ -3,6 +3,7 @@
 El pool es un singleton gestionado por el Composition Root y se inyecta en los
 repositorios. Registrar el tipo `vector` permite pasar/leer list[float] directo.
 """
+
 from __future__ import annotations
 
 from psycopg_pool import ConnectionPool
@@ -10,6 +11,7 @@ from psycopg_pool import ConnectionPool
 
 def _register_vector(conn) -> None:
     from pgvector.psycopg import register_vector
+
     register_vector(conn)
 
 

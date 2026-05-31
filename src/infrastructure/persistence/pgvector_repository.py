@@ -3,6 +3,7 @@
 Persiste chunks con embedding y busca top-K por similitud coseno (índice HNSW).
 Todo el SQL vive aquí; el núcleo solo ve entidades de dominio.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -22,12 +23,10 @@ class PgVectorKnowledgeRepository(VectorKnowledgeRepository):
     def _ensure_indexes(self) -> None:
         """Crear índices de búsqueda cuando se actualiza una DB ya inicializada."""
         with self._pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_document_chunks_fts
                     ON document_chunks USING gin (to_tsvector('spanish', content_cleaned))
-                """
-            )
+                """)
 
     def add_chunks(self, chunks: list[Chunk]) -> None:
         if not chunks:
@@ -52,11 +51,7 @@ class PgVectorKnowledgeRepository(VectorKnowledgeRepository):
         if not source_urls:
             self.add_chunks(chunks)
             return
-        rows = [
-            (str(c.id), c.content, c.embedding, c.source_url)
-            for c in chunks
-            if c.embedding
-        ]
+        rows = [(str(c.id), c.content, c.embedding, c.source_url) for c in chunks if c.embedding]
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
                 "DELETE FROM document_chunks WHERE source_url = ANY(%s)",
@@ -213,12 +208,10 @@ class PgVectorKnowledgeRepository(VectorKnowledgeRepository):
 
     def corpus_version(self) -> str:
         with self._pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
+            cur.execute("""
                 SELECT count(*)::text || ':' || COALESCE(max(created_at)::text, '')
                 FROM document_chunks
-                """
-            )
+                """)
             return cur.fetchone()[0]
 
     def count(self) -> int:

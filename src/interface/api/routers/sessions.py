@@ -1,4 +1,5 @@
 """Router de sesiones y mensajes persistidos (CU-03)."""
+
 from __future__ import annotations
 
 from typing import Annotated

@@ -3,6 +3,7 @@
 Única fuente de verdad de la config; la infraestructura recibe valores por
 inyección, no lee el entorno. Mapea 1:1 con `.env.example`.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

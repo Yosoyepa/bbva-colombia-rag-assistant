@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-
 DATASET = Path(__file__).resolve().parents[2] / "fixtures" / "ragas_dataset.jsonl"
 
 
